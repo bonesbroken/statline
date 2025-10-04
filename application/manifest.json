@@ -1,0 +1,43 @@
+{
+    "version": "0.1",
+    "name": "Basic App Template",
+    "buildPath": "dist/",
+    "permissions": ["slobs.scenes-sources", "slobs.external-links", "sld.vision"],
+    "supportedPlatforms": ["twitch", "youtube", "facebook"],
+    "icon": "./images/Icon.jpg",
+    "sources": [
+      {
+        "type": "browser_source",
+        "name": "App Source",
+        "id": "basic_app_source",
+        "about": {
+          "description": "Description field for your app source.",
+          "bullets": [
+            "Bullet point #1",
+            "Bullet point #2",
+            "Bullet point #3",
+            "Bullet point #4"
+          ],
+          "bannerImage": "./images/App Icon.jpg"
+        },
+        "file": "index.html",
+        "initialSize": {
+          "type": "absolute",
+          "width": 600,
+          "height": 600
+        }
+      }
+    ],
+    "pages": [
+      {
+        "slot": "top_nav",
+        "file": "settings.html",
+        "persistent": true,
+        "allowPopout": false,
+        "popOutSize": {
+          "width": 600,
+          "height": 600
+        }
+      }
+    ]
+  }

@@ -1,0 +1,1006 @@
+<!doctype html>
+<html class="sl-theme-dark" style="height: 100%;">
+  <head>
+    <meta charset="utf-8" />
+    <title>User Settings</title>
+    <script src="https://cdn.streamlabs.com/slobs-platform/lib/streamlabs-platform.min.js"></script>
+
+    <style>
+    * {
+      color: var(--sl-color-neutral-1000);
+      font-family: var(--sl-font-sans);
+      box-sizing: inherit;
+    }
+
+    html {
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: visible;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #0F1219;
+    }
+
+    .social-buttons {
+      display: flex;
+      gap: 0.5rem;  
+    }
+
+    #sidebar {
+      
+      position: fixed;
+      flex: 0;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 2;
+      background-color: #1A1F2A;
+      width: 320px;
+      transition: 350ms translate ease-in-out;
+      box-sizing: border-box;
+
+      & nav {
+        overflow: auto;
+        overflow-x: clip;
+        scrollbar-width: thin;
+        height: 100%;
+        padding: 1rem !important;
+
+        & sl-details:not(:last-of-type) {
+          margin-bottom: var(--sl-spacing-small);
+        }
+      }
+
+      .raised-nav {
+        height: calc(100% - 50px - 2rem);
+      }
+
+      .save-nav {
+        height: calc(100% - 50px - 5.5rem)
+      }
+
+      & nav p {
+        margin: 0.5rem 0 0 0;
+        color: var(--sl-color-neutral-600);
+        font-size: var(--sl-font-size-small);
+
+        & strong {
+          color: var(--sl-color-neutral-700);
+        }
+      }
+
+      & nav a {
+        color: var(--sl-color-primary-800);
+        font-weight: var(--sl-font-weight-semibold);
+        text-decoration: none;
+      }
+
+      & nav h2 {
+        font-size: var(--sl-font-size-x-large);
+        font-weight: var(--sl-font-weight-bold);
+        margin: 2rem 0 0 0;
+        color: var(--sl-color-neutral-600);
+        text-transform: uppercase;
+      }
+
+      & nav h3 {
+        font-size: var(--sl-font-size-large);
+        font-weight: var(--sl-font-weight-bold);
+        margin: 1rem 0 0 0;
+        color: var(--sl-color-neutral-600);
+        text-transform: uppercase;
+
+        & sl-icon {
+          padding-right: 0.5rem;
+        }
+      }
+
+      & nav > ul {
+        padding: 0;
+        margin: 0;
+
+        & > li {
+          list-style-type: none;
+
+          & p strong {
+            color: var(--sl-color-neutral-700);
+          }
+
+          & > ul {
+            margin-top: 0.3rem;
+
+            & > li {
+              color: var(--sl-color-neutral-700);
+              font-size: var(--sl-font-size-small);
+
+              & strong {
+                color: var(--sl-color-neutral-800);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    @media screen and (max-width: 900px) {
+        #sidebar {
+            translate: -100%;
+        }
+    }
+
+    @media screen and (max-width: 1650px) {
+        main {
+            margin-top: 140px;
+        }
+    }
+
+    main {
+      margin-top: 0px;
+      margin-left: 320px;
+      background-color: #0F1219;
+      position: relative;
+      height: 100%;
+    }
+
+    .content {
+      display: flex;
+      position: relative;
+      max-width: 100%;
+      height: 100%;
+      padding: 1em;
+    }
+
+    .content__body {
+      
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+    }
+
+    .padded {
+      padding: 2rem;
+    }
+
+    @media screen and (max-aspect-ratio: 1/1) {
+        .pages {
+        flex-direction: column;
+        }
+      }
+
+    .app-title {
+      font-size: var(--sl-font-size-3x-large);
+      font-weight: var(--sl-font-weight-semibold);
+    }
+
+    .app-description {
+      font-size: var(--sl-font-size-large);
+      color: var(--sl-color-neutral-700);
+      padding: 1rem 0rem;
+    }
+
+    @media screen and (max-width: 900px) {
+        main {
+            margin-left: 0;
+        }
+    }
+
+    .pages {
+      display: flex;
+      width: 100%;
+      gap: 1rem;
+      height: 100%;
+      min-height: 200px;
+    }
+    .pages__option {
+      flex: 1 1 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+
+      border-radius: 0.5rem;
+    }
+
+    .pointer {
+      cursor: pointer;
+      &:hover {
+        border: 2px solid var(--sl-color-primary-800);
+      }
+    }
+    
+    .skinGallery {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: contain; 
+
+      & video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+    }
+
+    .skin-carousel-item {
+      object-fit: contain;
+    }
+
+    #settingCanvas, #inspectCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+    }
+
+
+    .setting-group-2 {
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+      padding: 0.5rem;
+      align-items: center;
+      box-sizing: border-box;
+    }
+
+    .setting-group {
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+      padding: 0.5rem;
+      align-items: center;
+      box-sizing: border-box;
+
+      & > sl-range {
+        flex: 1 1 50%;
+      }
+
+      & > sl-color-picker {
+        flex: 1 1 50%;
+      }
+
+      & span {
+        
+        color: var(--sl-color-neutral-600);
+        font-size: var(--sl-font-size-medium);
+
+        & sl-icon {
+          padding-right: 0.25rem; 
+        }
+      }
+
+      & span.expand {
+        flex: 1 1 0%;
+      }
+    }
+
+    .button--has-label.button--medium .button__label {
+        padding: 0 !important;
+    }
+    .redeem-group {
+      display: none;
+      flex-direction: row;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .skin-gallery-group {
+      display: grid; grid-template-columns: repeat(4, 1fr); 
+      grid-auto-flow: row; 
+      gap: 1rem;
+    }
+
+    .menu-buttons {
+      position:  absolute;
+      top: 0;
+      right: 0;
+      margin: 2rem;
+      display: flex;
+      flex-direction: column;
+      background: var(--sl-color-neutral-400);
+      width: 300px;
+      z-index: 3;
+      border-radius: 0.5rem;
+      padding: 1rem;
+    }
+
+    .feedback-socials {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      z-index: 3;
+      position: absolute;
+
+      max-width: 300px;
+      background: var(--sl-color-neutral-400);
+      border-radius: 0.5rem;
+      padding: 1rem;
+
+      font-size: var(--sl-font-size-small);
+
+      & > p {
+        color: var(--sl-color-neutral-700);
+
+        & > a {
+          color: var(--sl-color-neutral-800);
+        }
+      }
+
+    }
+
+    #addAppSource {
+      position:  absolute;
+      display: block;
+      bottom: 0;
+      left: 0;
+      margin: 2rem;
+      z-index: 3;
+      padding: 0.5rem 0;
+    }
+    sl-range, sl-select {
+      padding: 0.5rem 0;
+
+      &::part(form-control-label) {
+        color: var(--sl-color-neutral-600);
+      }
+    }
+
+    sl-radio {
+      padding: 0.1rem 0.5rem;
+    }
+
+    sl-checkbox {
+      display: block;
+      padding: 0.1rem 0.5rem;
+    }
+
+    .alert-container {
+      position: absolute;
+      top: 0;
+      right: 0;
+      margin: 2rem;
+      z-index: 10;
+    }
+
+    #deleteSettings, #keyboardLayout {
+      width: 100%;
+      padding: 0.5rem 0;
+    }
+
+    .button-saved, .button-unsaved {
+      display: block;
+      position: fixed;
+      bottom: 4.5rem;
+      width: inherit;
+      padding: 0 2rem;
+    }
+
+    .button-homepage {
+      display: block;
+      position: fixed;
+      bottom: 1rem;
+      width: inherit;
+      padding: 0 2rem;
+    }
+
+    .button-gallery, #screenshot {
+      display: block;
+      width: inherit;
+      padding-top: 1rem;
+    }
+
+    sl-details {
+
+      &::part(base) {
+        border: solid 1px #2b2e37;
+        background-color: #0f1219;
+      }
+    }
+
+    #adminSettings {
+
+      &::part(base) {
+        border: solid 1px #2b2e37;
+        background: #0f1219;
+        background: linear-gradient(29deg, #0f1219 34%, #44516f 100%) !important;
+      }
+    }
+
+    .button-saved {
+      &::part(base) {
+        opacity: 0.5;
+        background: none;
+        border: 1px solid;
+        border-color: var(--sl-color-success-600);
+        color: var(--sl-color-success-600);
+      }
+
+      &::part(base):hover {
+        cursor: default;
+      }
+    }
+
+    .button-unsaved {
+      
+      &::part(base) {
+        background: none;
+        border-color: var(--sl-color-success-600);
+        color: var(--sl-color-success-600);
+      }
+
+      &::part(base):hover {
+        background-color: var(--sl-color-success-600);
+        border-color: var(--sl-color-success-600);
+        color: var(--sl-color-neutral-0);
+      }
+
+      &::part(base):active {
+        
+      } 
+    }
+
+   
+
+    #keyboardLayout {
+      display: none;
+    }
+
+    #keyboardLayout > sl-radio {
+      color: var(--sl-color-neutral-600);
+
+      &::part(label) {
+        padding-left: 1.5rem;
+      }
+    }
+
+    [name="enableEvent"] {
+
+      &::part(label) {
+        padding-left: 1.5rem;
+        color: var(--sl-color-neutral-600);
+      }
+    }
+
+    [name="skinComponents"] {
+      &::part(label) {
+        padding-left: 1rem;
+        color: var(--sl-color-neutral-600);
+      }
+      }
+
+
+    #toggleKeyTrak > span {
+      color: var(--sl-color-neutral-600);
+      font-size: var(--sl-font-size-large);
+    }
+
+    .help-text {
+      color: var(--sl-color-neutral-600);
+      font-size: var(--sl-font-size-small);
+    }
+
+    .image-input {
+      width: auto !important;
+      color: var(--sl-color-neutral-600);
+    }
+
+    .setting-logo-image {
+      background: #1a1a1e;
+      border-radius: 0.25rem;
+      margin: 0.5rem;
+    }
+
+    .image-url {
+      width: auto !important;
+      font-size: var(--sl-font-size-x-small) !important;
+      color: var(--sl-color-neutral-600) !important;
+    }
+
+    .hotkey-group {
+      margin-bottom: 0.5rem;
+    }
+
+    .keyboard-input {
+      max-width: 50%;
+
+      *::part(input) {
+        text-transform: uppercase;
+      }
+    }
+
+    .hotkey-group-items {
+      display: flex;
+      flex-direction: row;
+      align-items: baseline;
+      gap: 0.5rem;
+      justify-content: space-between;
+
+      & > sl-select > sl-option {
+          &::part(base) {
+          font-size: var(--sl-font-size-small);
+        }
+      }
+    }
+
+    .input__control {
+      text-transform: uppercase;
+    }
+
+    .keyboardModel {
+      padding: 0.5rem 0.5rem 2rem 0.5rem !important;
+      width: fit-content;
+      & > span {
+        font-size: var(--sl-font-size-large);
+        color: var(--sl-color-neutral-1000);
+      }
+    }
+
+    #info-icon {
+      color: var(--sl-color-primary-400);
+      font-size: 1.5rem;
+    }
+
+    .changelog-title {
+      display: inline-block;
+      padding: 0;
+      margin: 0;
+    }
+
+    .changelog-item {
+      margin-bottom: 1rem;
+
+      & span {
+        font-weight: var(--sl-font-weight-light);
+        color: var(--sl-color-neutral-700);
+        & em {
+          font-weight: var(--sl-font-weight-semibold);
+          font-style: normal;
+          padding-right: 0.5rem;
+        }
+
+        & em:not(:first-of-type) {
+            color: var(--sl-color-neutral-800);
+            font-weight: var(--sl-font-weight-normal);
+            padding: 0;
+        }
+
+      }
+    }
+
+    .changelog-note {
+      margin-top: 2rem;
+
+      & span {
+        font-weight: var(--sl-font-weight-light);
+        color: var(--sl-color-neutral-700);
+        & em {
+          font-weight: var(--sl-font-weight-semibold);
+          font-style: normal;
+          padding-right: 0.2rem;
+        }
+
+        & em:not(:first-of-type) {
+            color: var(--sl-color-neutral-800);
+            font-weight: var(--sl-font-weight-normal);
+        }
+
+      }
+    }
+
+    sl-tree-item[data-type="inner-tree"]::part(indentation)  {
+      width: 0px !important;
+    }
+
+    sl-tree-item[data-type="inner-tree"]::part(expand-button)  {
+      width: 0px !important;
+    } 
+
+    sl-breadcrumb-item::part(label) {
+      text-transform: uppercase;
+    }
+
+    sl-tab::part(base) {
+      font-size: var(--sl-font-size-medium);
+    }
+
+    sl-color-picker {
+      box-sizing: border-box;
+    }
+
+    #keyboardSkinInspect {
+      display: flex;
+      width: 100%;
+      justify-content: center;
+      gap: 2rem;  
+      overflow: auto;
+      padding-right: 1rem;
+    }
+
+    .skin-inspect {
+      display: flex;
+      background: none;
+      height: auto;
+      flex: 1 1 50%;
+      position: sticky;
+      top: 0;
+    }
+
+    .skin-background {
+      position: absolute;
+      display: block;
+      top: 0px;
+      left: 0px;
+      width: 100%;
+      height: 100%;
+      opacity: 0.5;
+    }
+
+    .button-inspect-unsaved, .button-inspect-saved {
+      width: 100%;
+      margin-top: 1.5rem;
+      box-sizing: border-box;
+    }
+
+    .skin-info {
+      display: flex;
+      flex: 1 1 50%;
+      flex-direction: column;
+
+      & h1 {
+        font-size: var(--sl-font-size-2x-large);
+        font-weight: var(--sl-font-weight-bold);
+        margin: 1rem 0;
+        color: var(--sl-color-neutral-600);
+        text-transform: uppercase;
+      }
+    }
+    .skin-author-text, .skin-description-text {
+      color: var(--sl-color-neutral-900);
+      text-transform: uppercase;
+    }
+    .skin-author-info {
+      margin-bottom: 2rem;
+      font-size: var(--sl-font-size-large);
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;  
+    } 
+    
+    .skin-description {
+      margin-bottom: 2rem;
+      color: var(--sl-color-neutral-600);
+      font-size: var(--sl-font-size-large);
+    }
+
+    .skin-author-link {
+      background: rgb(255 255 255 / 5%);
+      border-radius: 0.2em;
+      padding: 0.2em;
+
+      &:hover {
+        color: var(--sl-color-primary-400);
+        cursor: pointer;
+      }
+    }
+
+    .apply-group {
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+    }
+
+    #applySkin {
+    }
+
+    .mix-match {
+      flex-grow: 1;
+    }
+
+    sl-button sl-icon {
+      color: inherit;
+    }
+
+    .setting-group-3 {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: center;
+      width: 50%;
+
+      & > sl-color-picker {
+        flex: 1 1 50%;
+      }
+
+      & > sl-range {
+        flex: 1 1 50%;
+      }
+    }
+
+    sl-details > div.setting-group-3:nth-of-type(1) {
+      width: 100% !important;
+    }
+
+    .setting-group-col {
+      display: flex;
+      align-content: center;
+      justify-content: center;
+      align-items: baseline;
+      gap: 1rem;
+    }
+    .setting-group-col:last-child {
+      margin-bottom: 2rem;
+    }
+
+    .component-type {
+      flex: 1 1 0%;
+      color: var(--sl-color-neutral-600);
+      /* align-items: center; */
+      gap: 0.5rem;
+      display: flex;
+    }
+
+    .component-image-container {
+      display: flex;
+      align-items: center;
+      flex-grow: 1;
+      gap: 1rem;
+
+      & > sl-button {
+        box-sizing: border-box;
+        flex-grow: 1;
+      }
+    }
+
+    .component-image-upload {
+
+      & > sl-icon {
+        font-size: var(--sl-font-size-large) !important;
+      }
+    }
+
+    .component-key-wrap {
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+
+      & > sl-details {
+        flex-grow: 1;
+        margin-bottom: 1rem;
+      }
+    }
+
+    .apply-button {
+      display: flex;
+      justify-content: flex-end;
+      box-sizing: border-box;
+    }
+
+    sl-tab-panel > sl-details {
+      margin-bottom: 1rem;
+    }
+
+
+    .dialog__overlay {
+      backdrop-filter: blur(1px);
+    }
+
+    .kb-setting {
+      padding: 0;
+
+      & > sl-color-picker {
+        flex: none;
+      }
+    }
+
+    #app-version {
+      display: flex;
+      align-items: center;
+      flex-grow: 1;
+      justify-content: flex-end;
+      color: var(--sl-color-neutral-700);
+    }
+
+    </style>
+  </head>
+  <body>
+
+    <sl-tooltip content="Click to add the App Source in your scene."><sl-button id="addAppSource" size="medium" variant="neutral" class="homepage-element">Add App Source</sl-button></sl-tooltip>
+
+    <aside id="sidebar" >
+      <nav id="nav-keyboardSettings" class="raised-nav">
+        <sl-details summary="Hotkey Layout"> <!-- Hotkey Layout -->
+          <span class="help-text">Change which hotkeys control the overlay.</span>
+          <div class="hotkey-group"> <!-- Up Key -->
+            <div class="hotkey-group-items">
+              <div class="hotkey-group-title">Up Key</div> 
+              <sl-input size="small" class="keyboard-input" id="upKey" placeholder="Press key" maxlength=1 clearable></sl-input>
+            </div>
+          </div>
+          <div class="hotkey-group"> <!-- Down Key -->
+            <div class="hotkey-group-items">
+              <div class="hotkey-group-title">Down Key</div>
+              <sl-input size="small" class="keyboard-input" id="downKey" placeholder="Press key" maxlength=1 clearable></sl-input>
+            </div>
+          </div>
+          <div class="hotkey-group"> <!-- Left Key -->
+            <div class="hotkey-group-items">
+              <div class="hotkey-group-title">Left Key</div>
+              <sl-input size="small" class="keyboard-input" id="leftKey" placeholder="Press key" maxlength=1 clearable></sl-input>
+            </div>
+          </div>
+          <div class="hotkey-group"> <!-- Right Key -->
+            <div class="hotkey-group-items">
+              <div class="hotkey-group-title">Right Key</div>
+              <sl-input size="small" class="keyboard-input" id="rightKey" placeholder="Press key" maxlength=1 clearable></sl-input>
+            </div>
+          </div>
+          <div class="hotkey-group"> <!-- Shift Key -->
+            <div class="hotkey-group-items">
+              <div class="hotkey-group-title">Shift Key</div>
+              <sl-input size="small" class="keyboard-input" id="shiftKey" placeholder="Press key" maxlength=1 clearable></sl-input>
+            </div>
+          </div>
+          <div class="hotkey-group"> <!-- Control Key -->
+            <div class="hotkey-group-items">
+              <div class="hotkey-group-title">Ctrl Key</div>
+              <sl-input size="small" class="keyboard-input" id="ctrlKey" placeholder="Press key" maxlength=1 clearable></sl-input>
+            </div>
+          </div>
+          <div class="hotkey-group"> <!-- Space Key -->
+            <div class="hotkey-group-items">
+              <div class="hotkey-group-title">Space Key</div>
+              <sl-input size="small" class="keyboard-input" id="spaceKey" placeholder="Press key" maxlength=1 clearable></sl-input>
+            </div>
+          </div>
+          <sl-radio-group id="keyboardLayout" name="keyboardLayout">
+            <sl-radio value="WASD">WASD + Spacebar</sl-radio>
+            <sl-radio value="Arrow_Keys">Arrow Keys + Spacebar</sl-radio>
+            <sl-radio value="Numpad">Numpad (8426) + Spacebar</sl-radio>
+          </sl-radio-group>
+        </sl-details>
+        <sl-details summary="Logo Display"><!-- Logo Display -->
+          <span class="help-text">Upload a custom image to your keyboard.</span>
+          <div class="setting-group">
+            <sl-switch id="toggleLogoDisplay" size="small"></sl-switch>
+            <span>Show Logo Display</span>
+          </div>
+          <div class="setting-group">
+            <input id="logoInput" class="image-input" type="file" accept=".jpg, .jpeg, .png">
+            <sl-tooltip content="Upload Logo"><sl-button id="logoUpload" size="small" variant="primary" outline disabled><sl-icon name="upload" label="Upload Logo"></sl-icon></sl-button></sl-tooltip>
+          </div>
+        </sl-details>
+        <sl-details summary="Chat Display"><!-- Chat Display -->
+          <span class="help-text">Display Twitch Chat messages on your keyboard.</span>
+          <div class="setting-group">
+            <sl-switch id="toggleChatDisplay" size="small"></sl-switch>
+            <span>Show Chat Display</span>
+          </div>
+          <div class="setting-group kb-setting">
+            <sl-color-picker format="hex" id="chatDisplayColor" label="Chat Display Color" size="small" no-format-toggle="true"></sl-color-picker>
+            <span>Chat Message Color</span>
+          </div>        
+        </sl-details>
+        <sl-details summary="KeyTrak"> <!-- KeyTrak -->
+          <span class="help-text">Display a counter for your current session's key presses.</span>
+          <div class="setting-group">
+            <sl-switch id="toggleKeyTrak" size="small" ></sl-switch>
+            <span>Show KeyTrak</span>
+          </div>
+          <div class="setting-group kb-setting">
+            <sl-color-picker format="hex" id="keyTrakColor" label="KeyTrak Color" size="small" no-format-toggle="true"></sl-color-picker>
+            <span>KeyTrak Color</span>
+          </div>
+        </sl-details>
+        <sl-details summary="Stream Label Display"><!-- Stream Label Display -->
+          <span class="help-text">Display stream labels on your keyboard.</span>
+          <div class="setting-group">
+            <sl-switch id="toggleStreamLabelDisplay" size="small" ></sl-switch>
+            <span>Show Stream Label Display</span>
+          </div>
+          <div class="setting-group kb-setting">
+            <sl-color-picker format="hex" id="streamLabelDisplayColor" label="Stream Label Display Color" size="small" no-format-toggle="true"></sl-color-picker>
+            <span>Stream Label Color</span>
+          </div>
+          <sl-select id="streamLabels" label="Active Stream Label">
+          </sl-select>          
+        </sl-details>
+        <sl-details summary="Enable Events">
+          <span class="help-text">Select the events you'd like to enable.</span>
+          <sl-checkbox  name="enableEvent" id="onFollow">Follows</sl-checkbox>
+          <sl-checkbox  name="enableEvent" id="onSubscription">Subscriptions</sl-checkbox>
+          <sl-checkbox  name="enableEvent" id="onDonation">Tips</sl-checkbox>
+          <sl-checkbox  name="enableEvent" id="onBits">Bits</sl-checkbox>
+          <sl-checkbox  name="enableEvent" id="onRaid">Raids</sl-checkbox>
+          <sl-checkbox  name="enableEvent" id="onMerch">Merch</sl-checkbox>
+          <sl-checkbox  name="enableEvent" id="onSuperchat">Superchats</sl-checkbox>
+        </sl-details>
+        <sl-details summary="Other"><!-- Other -->
+          <sl-range id="displayTimer" label="Hide Keyboard after X seconds" min="0" max="20" step="0.1"></sl-range>
+          
+          <div class="setting-group kb-setting">
+            <span>Light</span>
+            <sl-color-picker format="hex" id="lightColor" label="Light Color" size="small" no-format-toggle="true"></sl-color-picker>
+            <sl-range id="lightIntensity" min="0" max="10" step="0.5"></sl-range>
+          </div>
+          
+          <sl-range id="cameraFOV" label="Camera Field of View" min="30" max="90" step="10"></sl-range>
+          <sl-range id="keySpeed" label="Key Speed" min="0.1" max="1" step="0.1"></sl-range>
+          
+          <div class="setting-group">
+            <sl-switch id="toggleDesignerSettings" size="small" ></sl-switch>
+            <span>Enable Designer Settings</span>
+          </div>
+        </sl-details>
+        <sl-details summary="Admin" id="adminSettings" style="display: none"><!-- Admin -->
+          <div class="setting-group">
+            <sl-switch id="toggleChatControl" size="small"></sl-switch>
+            <span>Chat Controlled Keys</span>
+          </div>
+          <div class="setting-group">
+            <sl-switch id="fakeChat" size="small"></sl-switch>
+            <span>Fake Chat</span>
+          </div>
+          <sl-button id="deleteSettings">Delete User Settings</sl-button>
+        </sl-details>
+        <sl-tooltip content="Update the camera angle in your scene."><sl-button id="updateCameraAngle" variant="default">
+          <sl-icon slot="prefix" name="camera"></sl-icon>Update Camera Angle
+        </sl-button></sl-tooltip>
+      </nav>
+      
+      <sl-button class="button-saved" size="large" style="display: none;" title="Changes saved.">Saved</sl-button>
+      <sl-button class="button-unsaved" size="large" style="display: none;" title="Click to save changes.">Save changes?</sl-button> 
+      <sl-button class="button-homepage" variant="default" style="display: none">
+        <sl-icon slot="prefix" name="arrow-left"></sl-icon>
+        Back
+      </sl-button>
+    </aside>
+    <main>
+      <div class="alert-container">
+        <sl-alert id="userSettingsUpdated" variant="success" duration="10000" countdown="rtl" closable>
+          <sl-icon slot="icon" name="check2-circle" ></sl-icon>
+          <strong class="alert-title">Your changes have been saved</strong><br />
+          <div class="alert-content">Your Keyboard Overlay has been updated.</div>
+        </sl-alert>
+        <sl-alert id="userSettingsDeleted" variant="warning" duration="10000" countdown="rtl" closable>
+          <sl-icon slot="icon" name="exclamation-triangle"></sl-icon>
+          <strong>Settings deleted!</strong><br />
+          Your Keyboard Settings have been deleted and reset.
+        </sl-alert>
+        <sl-alert id="generalAlert" variant="warning" duration="10000" countdown="rtl" closable>
+          <sl-icon slot="icon" name="exclamation-triangle"></sl-icon>
+          <strong class="alert-title">Settings deleted!</strong><br />
+          <div class="alert-content">Your Keyboard Settings have been deleted and reset.</div>
+        </sl-alert>
+      </div>
+      <article class="content">
+        <div class="content__body">
+          <div class="app-info">
+            <div class="app-title">Basic App Template</div>
+            <div class="app-description">This project is build with Webpack, JQuery, and uses <a href="https://shoelace.style/">shoelace.style</a> as a component library</div>
+          </div>
+
+          <div class="pages">
+            <div class="pages__option" id="keyboardSettings">
+              <canvas id="settingCanvas"></canvas>
+            </div>
+          </div>
+        </div>
+      </article>
+    </main>
+    
+  </body>
+</html>
