@@ -1,6 +1,6 @@
 import $ from "jquery";
 import equals from 'is-equal-shallow';
-import { defaultUserSettings, appVersion } from './utils.js';
+import { defaultUserSettings, appVersion, getGameName, getGameEvents, humanizeEventName } from './utils.js';
 
 import '@shoelace-style/shoelace/dist/themes/dark.css';
 import '@shoelace-style/shoelace/dist/components/button/button.js';
@@ -35,14 +35,17 @@ import { setBasePath } from '@shoelace-style/shoelace/dist/utilities/base-path.j
 setBasePath('./shoelace');
 
 // streamlabs api variables
-let streamlabs, streamlabsOBS;
+let streamlabs, streamlabsOBS, activeGameName;
 let hasAppSource = false;
+let visionStarted = false;
+let activeGame = false;
 let activeAppSourceId = 0;
 let userAssets = {};
 let oldSettings = {};
 let appSettings = {};
+let activeProcessInterval = null;
 
-async function loadElements() {
+async function loadShoelaceElements() {
     await Promise.allSettled([
         customElements.whenDefined('sl-range'),
         customElements.whenDefined('sl-icon'),
@@ -59,141 +62,37 @@ async function loadElements() {
 }
 
 $(function() {
-    loadElements();
-    init();
+    loadShoelaceElements();
+    initApp();
 });
 
-async function init() {
+async function initApp() {
     streamlabs = window.Streamlabs;
     streamlabs.init({ receiveEvents: true }).then(async (data) => {
         console.log(`${data.profiles.streamlabs.name} data:`, data);
         appSettings = data;
 
-        // load user settings
-        initSLDApi();
         await loadUserSettings();
-        $('#app-version').text(`v${appVersion}`);
+        updateUI();
+        
+        initDesktopAPI();
     });
-
-    streamlabs.onChatMessage(event => {
-        console.log('chat message', event);
-        //let message = event.body;
-        if(toggleChatControl) {
-            let message = event.body;
-
-
-            if (message.toLowerCase() == 'up') { 
-                upKeyUp = true; 
-                upKey.material = activeUpKeyMaterial;
-                setTimeout(() => {
-                    upKeyUp = false; 
-                    upKey.material = upKeyMaterial;
-                }, keyDelay);
-            }
-            if (message.toLowerCase() == 'left') { 
-                leftKeyUp = true; 
-                leftKey.material = activeLeftKeyMaterial;
-                setTimeout(() => {
-                    leftKeyUp = false; 
-                    leftKey.material = leftKeyMaterial;
-                }, keyDelay);
-            }
-            if (message.toLowerCase() == 'down') { 
-                downKeyUp = true; 
-                downKey.material = activeDownKeyMaterial;
-                setTimeout(() => {
-                    downKeyUp = false; 
-                    downKey.material = downKeyMaterial;
-                }, keyDelay);
-            }
-            if (message.toLowerCase() == 'right') { 
-                rightKeyUp = true; 
-                rightKey.material = activeRightKeyMaterial;
-                setTimeout(() => {
-                    rightKeyUp = false; 
-                    rightKey.material = rightKeyMaterial;
-                }, keyDelay);
-            }
-            if (message.toLowerCase() == 'jump' || message.toLowerCase() == 'space') { 
-                spaceKey.material = activeSpaceKeyMaterial;
-                spaceKeyUp = true;
-                setTimeout(() => {
-                    spaceKeyUp = false;
-                    spaceKey.material = spaceKeyMaterial;
-                }, keyDelay);
-            }
-            if (message.toLowerCase() == 'shift') { 
-                if(shiftKey)
-                    shiftKey.material = activeShiftKeyMaterial;
-                shiftKeyUp = true;
-                setTimeout(() => {
-                    shiftKeyUp = false;
-                    if(shiftKey)
-                        shiftKey.material = shiftKeyMaterial;
-                }, keyDelay);
-            }
-            if (message.toLowerCase() == 'ctrl') { 
-                if(ctrlKey)
-                    ctrlKey.material = activeCtrlKeyMaterial;
-                ctrlKeyUp = true;
-                setTimeout(() => {
-                    ctrlKeyUp = false;
-                    if(ctrlKey)
-                        ctrlKey.material = ctrlKeyMaterial;
-                }, keyDelay);
-            }
-        }
-    });
-
-    streamlabs.onMessage(event => {
-        if(event.type == "updateKeyTrak")
-            return;
-
-    });
-
-    streamlabs.onFollow(event => {});
-
-    streamlabs.onSubscription(event => {
-    });
-
-    streamlabs.onDonation(event => {
-    });
-
-    streamlabs.onBits(event => {
-    });
-
-    /*
-    streamlabs.onRaid(event => {
-        if(appSettings["onRaid"]) {
-            lastEventMessage = `${event.message[0].name} raided with ${event.message[0].raiders}!`;
-            Keyboard.updateDisplay("event", eventDisplayObj, lastEventMessage, appSettings["Event Display Color"]);
-        }
-    });
-
-    streamlabs.onMerch(event => {
-        if(appSettings["onMerch"]) {
-            lastEventMessage = `${event.message[0].from} bought ${event.message[0].product}!`;
-            Keyboard.updateDisplay("event", eventDisplayObj, lastEventMessage, appSettings["Event Display Color"]);
-        }
-    });
-
-    streamlabs.onSuperchat(event => {
-        if(appSettings["onSuperchat"]) {
-            lastEventMessage = `${event.message[0].name} Super Chat ${event.message[0].displayString}!`;
-            Keyboard.updateDisplay("event", eventDisplayObj, lastEventMessage, appSettings["Event Display Color"]);
-        }
-    });
-
-    */
 }
 
-function initSLDApi() {
+function updateUI() {
+    $('#app-version').text(`v${appVersion}`);
+    $('#maxEvents')[0].value = appSettings["maxEvents"];
+    $('#eventCount').prop("checked", appSettings["eventCount"]);
+}
+
+function initDesktopAPI() {
     streamlabsOBS = window.streamlabsOBS;
     streamlabsOBS.apiReady.then(() => {
-        // Vision Module
-        console.log(streamlabsOBS);
-        console.log(streamlabsOBS.v1.Vision);
-        streamlabsOBS.v1.Vision.initiateSubscription();
+        
+        streamlabsOBS.v1.Vision.initiateSubscription(); // Vision Module
+        if (typeof startActiveProcessPolling === 'function') {
+            startActiveProcessPolling(5000);
+        }
 
         streamlabsOBS.v1.Vision.userStateTree(userStateTree => {
             console.log('user state tree', userStateTree);
@@ -205,11 +104,49 @@ function initSLDApi() {
 
         streamlabsOBS.v1.Vision.visionEvent(visionEventsPayload => {
             console.log('vision event', visionEventsPayload);
+            /*
+            {
+                "vision_event_id": "81bb9aa8-af91-444b-aec6-7a001e54c7a2",
+                "game": "battlefield_6",
+                "events": [
+                    {
+                        "name": "elimination",
+                        "data": []
+                    }
+                ],
+                "timestamp": 1759564250112,
+                "event_meta": {
+                    "isTest": false,
+                    "isPreview": false,
+                    "isRollback": false
+                }
+            }
+            */
+            if (visionEventsPayload && visionEventsPayload.game && Array.isArray(visionEventsPayload.events) && visionEventsPayload.events.length > 0) {
+                const gameKey = visionEventsPayload.game;
+                const $eventList = $('#eventList');
+                visionEventsPayload.events.forEach(event => {
+                    console.log('vision event', event);
+                    const eventName = (event && event.name) ? event.name : String(event);
+
+                    const userMap = appSettings && appSettings.GAME_EVENTS_MAP && appSettings.GAME_EVENTS_MAP[gameKey];
+                    const enabled = (userMap && userMap[eventName] === true);
+                    console.log(`event ${eventName} enabled: ${enabled}`);
+                    if (enabled) {
+                        if ($eventList.length) {
+                            const label = humanizeEventName(eventName);
+                            $eventList.append(`<li data-game="${gameKey}" data-event="${eventName}">${label}</li>`);
+                        } else {
+                            console.warn('#eventList not found in DOM; cannot append vision event');
+                        }
+                    }
+                });
+            }
         });
 
         streamlabsOBS.v1.Sources.getSources().then(sources => { // check if app source exists in scene collection
-            sources.forEach(source => { 
-                if(source.type == "browser_source" && source.appSourceId == "basic_app_source") {
+            sources.forEach(source => {
+                if (source.type == "browser_source" && source.appSourceId == "statline_source") {
                     hasAppSource = true;
                     activeAppSourceId = source.id;
                     console.log(`App source found: ${hasAppSource}, ${activeAppSourceId}`);
@@ -228,7 +165,7 @@ function initSLDApi() {
                 return;
             }
 
-            if(!hasAppSource && source.appSourceId == "basic_app_source") {
+            if(!hasAppSource && source.appSourceId == "statline_source") {
                 hasAppSource = true;
                 activeAppSourceId = source.id;
                 console.log("new app source added", hasAppSource, activeAppSourceId);
@@ -249,7 +186,7 @@ function initSLDApi() {
 }
 
 async function loadUserSettings() {
-    streamlabs.userSettings.get('basic-app-settings').then(data => {
+    streamlabs.userSettings.get('statline-settings').then(data => {
 
         if (!data) {
             data = defaultUserSettings;
@@ -289,50 +226,202 @@ async function loadUserSettings() {
 function updateAddAppSourceButton(hasSource) {
     if(hasSource) {
         $('#addAppSource').prop("disabled", hasSource);
-        $('#addAppSource').text("Basic App Source added.");
-        $('#addAppSource').parent().attr('content', 'Basic App Source is in your scene.');
+        $('#addAppSource').text("StatLine Source added.");
+        $('#addAppSource').parent().attr('content', 'StatLine Source is in your scene.');
     } else {
         $('#addAppSource').prop("disabled", false);
-        $('#addAppSource').text("Add Basic App Source");
-        $('#addAppSource').parent().attr('content', 'Click to add the Basic App Source in your scene.');
+        $('#addAppSource').text("Add StatLine Source");
+        $('#addAppSource').parent().attr('content', 'Click to add the StatLine Source in your scene.');
     }
 }
 
 // event handlers
-$("#app-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://bonesbroken.com/keyboard-overlay-app/'); });
+$("#app-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://bonesbroken.com/'); });
+$("#x-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://x.com/bonesbrokencom'); });
+$("#discord-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://discord.gg/XgZKP9nYU7'); });
+$("#tutorial-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://youtu.be/945x5hozkq8'); });
+
 $(".button-unsaved").on('click', () => { saveChanges(); });
 
 $("#addAppSource").on('click', () => { 
     streamlabsOBS.v1.Scenes.getActiveScene().then(scene => {
-        streamlabsOBS.v1.Sources.createAppSource('Basic App Source', 'basic_app_source').then(source => {
+        streamlabsOBS.v1.Sources.createAppSource('StatLine Source', 'statline_source').then(source => {
             streamlabsOBS.v1.Scenes.createSceneItem(scene.id, source.id);
         });
     });
 });
 
+$('#maxEvents').off('sl-change');
+$('#maxEvents').on('sl-change', event => {
+    const val = event.target && event.target.value;
+    if (val === undefined) return;
+    appSettings["maxEvents"] = Number(val);
 
-
-
-
-$("#getActiveProcess").on('click', () => { 
-    streamlabsOBS.v1.Vision.requestActiveProcess().then(response => {
-        console.log('active process', response); 
+    streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
+        oldSettings = structuredClone(appSettings);
+    }).catch(saveErr => {
+        console.error('Failed to save maxEvents setting', saveErr);
+        showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
     });
 });
 
+$('#eventCount').off('sl-change');
+$('#eventCount').on('sl-change', event => {
+    const checked = event.target && event.target.checked;
+    if (checked === undefined) return;
+    appSettings["eventCount"] = !!checked;
+
+    streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
+        oldSettings = structuredClone(appSettings);
+    }).catch(saveErr => {
+        console.error('Failed to save eventCount setting', saveErr);
+        showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
+    });
+});
+
+$("#streamlabsAI").on('click', () => {
+    streamlabsOBS.v1.Vision.requestActiveProcess().then(response => {
+        console.log('active process', response);
+
+        if (response && response.game) {
+            activeGame = true;
+            //showAlert('#generalAlert', 'Active Vision Process', `Current active Vision process: ${response.name}`);
+        }
+
+    }).catch(err => {
+        console.error('requestActiveProcess error', err);
+        if(err == 'Failed to fetch') { // streamlabs ai is not running
+            streamlabsOBS.v1.Vision.startVision();
+            activeGame = false;
+            visionStarted = true;
+            $('#streamlabsAI').prop("disabled", true);
+            $('#streamlabsAI').text("Streamlabs AI running");
+            $('#streamlabsAI').parent().attr('content', 'Streamlabs AI is running.');
+        }
+    });
+});
+
+function showAlert(element, title, content) {
+    $(element)[0].show();
+    $(element).find('.alert-title').text(title);
+    $(element).find('.alert-content').text(content);
+}
 
 
+// Polling helpers for Vision active process
+function startActiveProcessPolling(intervalMs = 5000) {
+    if (activeProcessInterval) return; // already polling
+    // run immediately then every intervalMs
+    checkActiveProcess();
+    activeProcessInterval = setInterval(checkActiveProcess, intervalMs);
+}
 
+function stopActiveProcessPolling() {
+    if (activeProcessInterval) {
+        clearInterval(activeProcessInterval);
+        activeProcessInterval = null;
+    }
+}
 
+function loadGameEvents(gameName) {
 
+    if (!gameName) return;
+    console.log(getGameName(gameName));
+    $('sl-details[summary="Enable Game Events"] > span.help-text').text(`Show ${getGameName(gameName)} game events.`);
 
+    const $details = $('sl-details[summary="Enable Game Events"]');
+    if (!$details.length) return;
 
+    // ensure appSettings has a GAME_EVENTS_MAP object
+    if (!appSettings.GAME_EVENTS_MAP) {
+        appSettings.GAME_EVENTS_MAP = structuredClone(defaultUserSettings.GAME_EVENTS_MAP || {});
+    }
 
+    // remove any previously generated checkboxes for this game
+    $details.find(`sl-checkbox[data-game="${gameName}"]`).remove();
 
+    // prefer the defaults from defaultUserSettings.GAME_EVENTS_MAP, fallback to getGameEvents list
+    const defaultMap = (defaultUserSettings && defaultUserSettings.GAME_EVENTS_MAP && defaultUserSettings.GAME_EVENTS_MAP[gameName]) || null;
+    const eventKeys = defaultMap ? Object.keys(defaultMap) : getGameEvents(gameName) || [];
 
+    eventKeys.forEach(key => {
+        const userChecked = appSettings.GAME_EVENTS_MAP && appSettings.GAME_EVENTS_MAP[gameName] && (appSettings.GAME_EVENTS_MAP[gameName][key] === true);
+        const defaultChecked = defaultMap ? !!defaultMap[key] : false;
+        const checked = userChecked || defaultChecked;
 
+        const $cb = $(`<sl-checkbox name="gameEvent" id="${gameName}__${key}" data-game="${gameName}" data-event="${key}">${humanizeEventName(key)}</sl-checkbox>`);
+        $details.append($cb);
+        // set the DOM property for the web component
+        const el = $cb.get(0);
+        if (el) el.checked = !!checked;
+    });
 
-function showUnsavedChanges() {
+    // delegated handler to persist per-game event checkbox changes
+    $details.off('sl-change', 'sl-checkbox[data-game]');
+    $details.on('sl-change', 'sl-checkbox[data-game]', event => {
+        const tgt = event.target;
+        const game = tgt.dataset.game;
+        const ev = tgt.dataset.event;
+        if (!game || !ev) return;
+        if (!appSettings.GAME_EVENTS_MAP) appSettings.GAME_EVENTS_MAP = {};
+        if (!appSettings.GAME_EVENTS_MAP[game]) appSettings.GAME_EVENTS_MAP[game] = {};
+        appSettings.GAME_EVENTS_MAP[game][ev] = !!tgt.checked;
+
+        // immediately persist the updated settings
+        streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
+            oldSettings = structuredClone(appSettings);
+        }).catch(saveErr => {
+            console.error('Failed to save user settings', saveErr);
+            showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
+        });
+    });
+}
+
+async function checkActiveProcess() {
+    if (!streamlabsOBS || !streamlabsOBS.v1 || !streamlabsOBS.v1.Vision) return;
+    try {
+        const response = await streamlabsOBS.v1.Vision.requestActiveProcess();
+        console.log('poll active process', response);
+
+        if (response && response.game) {
+            if (!activeGame) {
+                activeGame = true;
+                activeGameName = response.game
+                // keep the UI in sync
+                $('#streamlabsAI').prop('disabled', true);
+                $('#streamlabsAI').text('Streamlabs AI running');
+                $('#streamlabsAI').parent().attr('content', `${getGameName(response.game)} detected.`);
+                loadGameEvents(response.game);
+            } else if(activeGame) {
+                if (activeGameName !== response.game) {
+                    activeGameName = response.game;
+                    $('#streamlabsAI').parent().attr('content', `${getGameName(response.game)} detected.`);
+                    loadGameEvents(response.game);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('checkActiveProcess error', err);
+        const msg = (err && (err.message || err.toString())) || '';
+
+        if (msg.includes('Failed to fetch')) {
+            // Streamlabs AI / Vision service likely not running or not reachable
+            if (activeGame) activeGame = false;
+            if (visionStarted) visionStarted = false;
+            $('#streamlabsAI').prop('disabled', false);
+            $('#streamlabsAI').text('Start Streamlabs AI');
+            $('#streamlabsAI').parent().attr('content', 'Streamlabs AI is not running.');
+        } else if (err && err.result && err.result.detail == 'No active process found') {
+            if (activeGame) activeGame = false;
+            $('#streamlabsAI').prop('disabled', true);
+            $('#streamlabsAI').text('Streamlabs AI running');
+            $('#streamlabsAI').parent().attr('content', 'No game detected.');
+        }
+        // swallow other errors to avoid uncaught promise rejections; they are logged above
+    }
+}
+
+function checkSavedChanges() {
     if (equals(oldSettings, appSettings) == false) {
         $(".button-unsaved").show();
         $("nav").addClass("save-nav");
@@ -345,70 +434,16 @@ function showUnsavedChanges() {
 
 function saveChanges() {
     if (equals(oldSettings, appSettings) == false) {
-        streamlabs.userSettings.set('basic-app-settings', appSettings).then(() => {
-            showAlert('#userSettingsUpdated', `Your changes have been saved`, 'Your settings have been updated.');
+        streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
+            showAlert('#userSettingsUpdated', `StatLine updated!`, 'Your settings have been saved.');
             $(".button-saved").show();
             $(".button-unsaved").hide();
 
             streamlabs.userSettings.getAssets().then(response => { 
                 userAssets = response;
-                streamlabs.postMessage('updateTheme', appSettings);
+                //streamlabs.postMessage('updateTheme', appSettings);
             });
         });
         oldSettings = structuredClone(appSettings);
     }
-}
-
-function showAlert(element, title, content) {
-    $(element)[0].show();
-    $(element).find('.alert-title').text(title);
-    $(element).find('.alert-content').text(content);
-}
-
-$('#onSubscription').on('sl-change', event => {
-    settings["onSubscription"] = event.target.checked;
-    showUnsavedChanges();
-});
-
-$('#onDonation').on('sl-change', event => {
-    settings["onDonation"] = event.target.checked;
-    showUnsavedChanges();
-});
-
-$('#onBits').on('sl-change', event => {
-    settings["onBits"] = event.target.checked;
-    showUnsavedChanges();
-});
-
-$('#onRaid').on('sl-change', event => {
-    settings["onRaid"] = event.target.checked;
-    showUnsavedChanges();
-});
-
-$('#onMerch').on('sl-change', event => {
-    settings["onMerch"] = event.target.checked;
-    showUnsavedChanges();
-});
-
-$('#onSuperchat').on('sl-change', event => {
-    settings["onSuperchat"] = event.target.checked;
-    showUnsavedChanges();
-});
-
-function startFakeChat(minDuration, maxDuration) {
-    let fakeChatMessages = ["got it!!", "HEy!", "YOOO", "oof", "ehh", "cool!", "ok!", "huh?", "dude why", "sup?", "HAHA", "jump!", "up?", "left!1!", "down.", "down", "DOWN!", "UP!!", "right?", "RIGHT!", "real", "REAL", "LOL", "meh", "ha", "heh.", "wut", "why", "k dude", "watev", "k", "xDD", "n1 :)", "gg <3", "gg wp" ];
-    let fakeChatUsernames = ["sly", "geo", "orgo", "Luna", "FLUX", "fury", "fox", "pulsE", "corn", "josh", "jane", "hails"];
-    
-    chatTimer = setInterval(() => {
-        const rChat = fakeChatMessages[Math.floor(Math.random() * fakeChatMessages.length)];
-        const rUser = fakeChatUsernames[Math.floor(Math.random() * fakeChatUsernames.length)];
-
-        lastChatMessage = `${rUser}: ${rChat}`;
-        Keyboard.updateDisplay("chat", chatDisplayObj, lastChatMessage, settings["Chat Display Color"]);
-
-    }, Math.random() * ((maxDuration * 1000) - (minDuration * 1000)) + (minDuration * 1000));
-}
-
-function stopFakeChat() {
-    clearInterval(chatTimer);
 }
