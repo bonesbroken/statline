@@ -5,7 +5,7 @@ Website: https://bonesbroken.com/
 Display your game events in a customizable vertical feed. Open Source app for [Streamlabs Desktop](https://streamlabs.com/streamlabs-live-streaming-software).
 
 ### Getting Started
-Clone the project. Run a terminal from the application folder and run `npm i` to install Shoelace, jquery & webpack. To build the app, run `npx webpack`.
+Clone the project. Run a terminal from the application folder and run `npm i` to install dependencies. To build the app, run `npx webpack`.
 
 This project is build with Webpack, JQuery, and uses [shoelace.style](https://shoelace.style/) as a component library. The [official documentation page](https://slobs-platform.readme.io/docs/getting-started) will help you get started with building apps using the Streamlabs APIs. Visit to the Streamlabs App Store Developer page and click [Create App](https://platform.streamlabs.com/) to create your first app. 
 
