@@ -52,7 +52,7 @@
         height: 100%;
         padding: 1rem !important;
 
-        & sl-details:not(:last-of-type) {
+        & sl-details {
           margin-bottom: var(--sl-spacing-small);
         }
       }
@@ -205,6 +205,11 @@
       position: relative;
     }
 
+    #canvasList {
+      display: flex;
+      flex-direction: column;
+    }
+
     #eventList {
       list-style-type: none;
       padding: 0;
@@ -294,6 +299,10 @@
       margin: 2rem;
       z-index: 3;
       padding: 0.5rem 0;
+
+      & > span {
+        color: inherit;
+      }
     }
 
     sl-range, sl-select {
@@ -311,6 +320,14 @@
     sl-checkbox {
       display: block;
       padding: 0.1rem 0.5rem;
+    }
+
+    .color-picker {
+      padding: 0;
+
+      & > sl-color-picker {
+        flex: none;
+      }
     }
 
     .alert-container {
@@ -384,7 +401,7 @@
       } 
     }
 
-    [name="gameEvent"] {
+    [name="gameEvent"], [name="showEventCount"],[name="showEventTime"] {
 
       &::part(label) {
         padding-left: 0.5rem;
@@ -458,12 +475,21 @@
       justify-content: flex-end;
       color: var(--sl-color-neutral-700);
     }
+
+    #randomEvent {
+      width: 100%;
+    }
+
+    .riveCanvas {
+      width: 400px;
+      height: 120px;
+    }
     </style>
   </head>
   <body>
 
     <sl-tooltip content="Click to add the App Source in your scene."><sl-button id="addAppSource" size="medium" variant="neutral" class="homepage-element">Add App Source</sl-button></sl-tooltip>
-    <sl-tooltip content="Click to start running Streamlabs AI"><sl-button id="streamlabsAI" size="medium" variant="neutral" class="homepage-element">Start Streamlabs AI</sl-button></sl-tooltip>
+    <sl-tooltip content="Click to start running Streamlabs AI"><sl-button id="streamlabsAI" size="medium" variant="neutral" class="homepage-element"><sl-icon slot="prefix" name="play-circle"></sl-icon><span class="label">Start Streamlabs AI</span></sl-button></sl-tooltip>
 
     <aside id="sidebar" >
       <nav id="" class="raised-nav">
@@ -487,15 +513,26 @@
           </div>
         </sl-details>
         <sl-details summary="Enable Game Events">
-          <span class="help-text">Game events for Fortnite</span>
+          <span class="help-text">Show game events.</span>
+          <sl-select id="gameSelect" label="Select Game"></sl-select>
         </sl-details>
         <sl-details summary="StatLine Settings">
           <sl-range id="displayTimer" label="Hide StatLine after X seconds of inactivity" min="0" max="60" step="1"></sl-range>
-          <sl-range id="maxEvents" label="Max Events to Show" min="1" max="10" step="1"></sl-range>
+          <sl-range id="maxEvents" class="sliderInput" label="Max Events" min="1" max="20" step="1"></sl-range>
         </sl-details>
         <sl-details summary="Display Settings">
-          <sl-checkbox  name="eventCount" id="eventCount">Show Event Count</sl-checkbox>
+          <sl-checkbox name="showEventCount" id="showEventCount" class="checkboxInput" style="display: none;">Show Event Count</sl-checkbox>
+          <sl-checkbox name="showEventTime" id="showEventTime" class="checkboxInput">Show Event Time</sl-checkbox>
+          <div class="setting-group color-picker">
+            <sl-color-picker format="hex" id="color1" class="colorInput" label="Color 1" size="small" no-format-toggle="true"></sl-color-picker>
+            <span>Color 1</span>
+          </div>
+          <div class="setting-group color-picker">
+            <sl-color-picker format="hex" id="color2" class="colorInput" label="Color 2" size="small" no-format-toggle="true"></sl-color-picker>
+            <span>Color 2</span>
+          </div>
         </sl-details>
+        <sl-tooltip content="Play a random game event."><sl-button id="randomEvent" size="medium" variant="primary" outline><sl-icon slot="prefix" name="dice-5"></sl-icon>Random Event</sl-button></sl-tooltip>
       </nav>
       
       <sl-button class="button-saved" size="large" style="display: none;" title="Changes saved.">Saved</sl-button>
@@ -527,9 +564,7 @@
           </div>
 
           <div class="pages">
-            <div class="pages__option">
-              <ul id="eventList"></ul>
-            </div>
+            <div id="canvasList"></div>
           </div>
         </div>
       </article>

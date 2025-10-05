@@ -1,6 +1,6 @@
 import $ from "jquery";
 import equals from 'is-equal-shallow';
-import { defaultUserSettings, appVersion, getGameName, getGameEvents, humanizeEventName } from './utils.js';
+import { defaultUserSettings, appVersion, getGameName, getGameEvents, humanizeEventName, createEvent } from './utils.js';
 
 import '@shoelace-style/shoelace/dist/themes/dark.css';
 import '@shoelace-style/shoelace/dist/components/button/button.js';
@@ -44,6 +44,8 @@ let userAssets = {};
 let oldSettings = {};
 let appSettings = {};
 let activeProcessInterval = null;
+const pollingRate = 6000; // ms
+let lastEventTime = Date.now();
 
 async function loadShoelaceElements() {
     await Promise.allSettled([
@@ -70,7 +72,6 @@ async function initApp() {
     streamlabs = window.Streamlabs;
     streamlabs.init({ receiveEvents: true }).then(async (data) => {
         console.log(`${data.profiles.streamlabs.name} data:`, data);
-        appSettings = data;
 
         await loadUserSettings();
         updateUI();
@@ -82,7 +83,23 @@ async function initApp() {
 function updateUI() {
     $('#app-version').text(`v${appVersion}`);
     $('#maxEvents')[0].value = appSettings["maxEvents"];
-    $('#eventCount').prop("checked", appSettings["eventCount"]);
+    $('#showEventCount').prop("checked", appSettings["showEventCount"]);
+    $('#showEventTime').prop("checked", appSettings["showEventTime"]);
+    $('#color1').val(appSettings["color1"]);
+    $('#color2').val(appSettings["color2"]);
+
+    const map = defaultUserSettings && defaultUserSettings.GAME_EVENTS_MAP;
+    const games = map ? Object.keys(map) : [];
+    if (games.length) {
+        const $select = $('#gameSelect');
+        games.forEach(game => {
+            $select.append(`<sl-option value="${game}">${getGameName(game)}</sl-option>`);
+        });
+        if(appSettings['lastActiveGame']) {
+            $select.val(appSettings['lastActiveGame']);
+            loadGameEvents(appSettings['lastActiveGame']);
+        }
+    }
 }
 
 function initDesktopAPI() {
@@ -91,7 +108,7 @@ function initDesktopAPI() {
         
         streamlabsOBS.v1.Vision.initiateSubscription(); // Vision Module
         if (typeof startActiveProcessPolling === 'function') {
-            startActiveProcessPolling(5000);
+            startActiveProcessPolling(pollingRate);
         }
 
         streamlabsOBS.v1.Vision.userStateTree(userStateTree => {
@@ -125,21 +142,19 @@ function initDesktopAPI() {
             if (visionEventsPayload && visionEventsPayload.game && Array.isArray(visionEventsPayload.events) && visionEventsPayload.events.length > 0) {
                 const gameKey = visionEventsPayload.game;
                 const $eventList = $('#eventList');
+                
                 visionEventsPayload.events.forEach(event => {
-                    console.log('vision event', event);
+                    //console.log('vision event', event);
                     const eventName = (event && event.name) ? event.name : String(event);
 
                     const userMap = appSettings && appSettings.GAME_EVENTS_MAP && appSettings.GAME_EVENTS_MAP[gameKey];
                     const enabled = (userMap && userMap[eventName] === true);
-                    console.log(`event ${eventName} enabled: ${enabled}`);
+                    //console.log(`event ${eventName} enabled: ${enabled}`);
                     if (enabled) {
-                        if ($eventList.length) {
-                            const label = humanizeEventName(eventName);
-                            $eventList.append(`<li data-game="${gameKey}" data-event="${eventName}">${label}</li>`);
-                        } else {
-                            console.warn('#eventList not found in DOM; cannot append vision event');
-                        }
+                        fireGameEvent(gameKey, eventName, visionEventsPayload.timestamp);
+                        streamlabs.postMessage('fireGameEvent', {gameKey: gameKey, eventName: eventName, time: visionEventsPayload.timestamp});
                     }
+
                 });
             }
         });
@@ -185,6 +200,80 @@ function initDesktopAPI() {
     });
 }
 
+$('#randomEvent').on('click', () => {
+    const $gameSelect = $('#gameSelect');
+    const chosenGame = $gameSelect.length ? $gameSelect.val() : getRandomGame();
+    const chosenEvent = getRandomEvent(chosenGame);
+
+    if (chosenGame && chosenEvent) {
+        console.log(`firing random event: ${chosenGame} - ${chosenEvent}`);
+        fireGameEvent(chosenGame, chosenEvent, Date.now());
+        //streamlabs.postMessage('fireGameEvent', {gameKey: chosenGame, eventName: chosenEvent, time: Date.now()});
+    } else {
+        console.warn('No game or event available for randomEvent');
+    }
+
+});
+
+// helper: pick a random game key from defaultUserSettings.GAME_EVENTS_MAP
+function getRandomGame() {
+    const map = defaultUserSettings && defaultUserSettings.GAME_EVENTS_MAP;
+    if (!map || typeof map !== 'object') return null;
+    const keys = Object.keys(map);
+    if (!keys.length) return null;
+    return keys[Math.floor(Math.random() * keys.length)];
+}
+
+// helper: pick a random event key for a given gameName using defaultUserSettings.GAME_EVENTS_MAP
+function getRandomEvent(gameName) {
+    if (!gameName) return null;
+    const defaultMap = defaultUserSettings && defaultUserSettings.GAME_EVENTS_MAP && defaultUserSettings.GAME_EVENTS_MAP[gameName];
+    let keys = [];
+    if (defaultMap && typeof defaultMap === 'object') {
+        keys = Object.keys(defaultMap);
+    }
+    // fallback to getGameEvents list if no default map present
+    if (!keys.length) {
+        const list = getGameEvents(gameName) || [];
+        keys = list;
+    }
+    if (!keys.length) return null;
+    return keys[Math.floor(Math.random() * keys.length)];
+}
+
+function fireGameEvent(gameKey, eventName, time) {
+    const eventTime = ((time - lastEventTime) / 1000).toFixed(1);
+    lastEventTime = time;
+
+    const $canvasList = $('#canvasList');
+    if (!$canvasList.length) return; // nothing to do if container missing
+
+    // count only element children (jQuery .children() does this)
+    let childCount = $canvasList.children().length;
+
+    // If we're already at or above the max, remove the oldest before appending
+    const max = Number(appSettings && appSettings["maxEvents"]) || 0;
+    if (max > 0 && childCount >= max) {
+        // remove as many as needed to make room for one new item (usually 1)
+        const removeCount = childCount - (max - 1);
+        for (let i = 0; i < removeCount; i++) {
+            $canvasList.children().first().remove();
+        }
+        // refresh count
+        childCount = $canvasList.children().length;
+    }
+
+    createEvent({
+        parent: $canvasList[0],
+        game: gameKey,
+        event: eventName,
+        time: eventTime,
+        showEventTime: appSettings["showEventTime"],
+        color1: appSettings["color1"],
+        color2: appSettings["color2"]
+    });
+}
+
 async function loadUserSettings() {
     streamlabs.userSettings.get('statline-settings').then(data => {
 
@@ -203,6 +292,7 @@ async function loadUserSettings() {
             }
             oldSettings = structuredClone(data);
             appSettings = structuredClone(data);
+            streamlabs.postMessage('updateSettings', appSettings);
         }
         
     });
@@ -251,52 +341,76 @@ $("#addAppSource").on('click', () => {
     });
 });
 
-$('#maxEvents').off('sl-change');
-$('#maxEvents').on('sl-change', event => {
+$('.sliderInput').off('sl-change');
+$('.sliderInput').on('sl-change', event => {
     const val = event.target && event.target.value;
     if (val === undefined) return;
-    appSettings["maxEvents"] = Number(val);
+    appSettings[$(event.target).attr('id')] = Number(val);
 
     streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
         oldSettings = structuredClone(appSettings);
+        streamlabs.postMessage('updateSettings', appSettings);
+
     }).catch(saveErr => {
-        console.error('Failed to save maxEvents setting', saveErr);
+        console.error('Failed to save setting', saveErr);
         showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
     });
 });
 
-$('#eventCount').off('sl-change');
-$('#eventCount').on('sl-change', event => {
+$('.checkboxInput').off('sl-change');
+$('.checkboxInput').on('sl-change', event => {
     const checked = event.target && event.target.checked;
     if (checked === undefined) return;
-    appSettings["eventCount"] = !!checked;
+
+    appSettings[$(event.target).attr('id')] = !!checked;
 
     streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
         oldSettings = structuredClone(appSettings);
+        streamlabs.postMessage('updateSettings', appSettings);
     }).catch(saveErr => {
-        console.error('Failed to save eventCount setting', saveErr);
+        console.error('Failed to save setting', saveErr);
+        showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
+    });
+});
+
+$('.colorInput').off('sl-change');
+$('.colorInput').on('sl-change', event => {
+    const val = event.target && event.target.value;
+    if (val === undefined) return;
+    appSettings[$(event.target).attr('id')] = val;
+
+    streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
+        oldSettings = structuredClone(appSettings);
+        streamlabs.postMessage('updateSettings', appSettings);
+    }).catch(saveErr => {
+        console.error('Failed to save setting', saveErr);
         showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
     });
 });
 
 $("#streamlabsAI").on('click', () => {
     streamlabsOBS.v1.Vision.requestActiveProcess().then(response => {
-        console.log('active process', response);
+        //console.log('active process', response);
 
         if (response && response.game) {
             activeGame = true;
+            $('#streamlabsAI > sl-icon').attr('name', 'check-circle');
+            $('#streamlabsAI').attr('variant', 'success');
             //showAlert('#generalAlert', 'Active Vision Process', `Current active Vision process: ${response.name}`);
         }
 
     }).catch(err => {
-        console.error('requestActiveProcess error', err);
+        //console.error('requestActiveProcess error', err);
         if(err == 'Failed to fetch') { // streamlabs ai is not running
             streamlabsOBS.v1.Vision.startVision();
             activeGame = false;
             visionStarted = true;
             $('#streamlabsAI').prop("disabled", true);
-            $('#streamlabsAI').text("Streamlabs AI running");
-            $('#streamlabsAI').parent().attr('content', 'Streamlabs AI is running.');
+            $('#streamlabsAI').attr('variant', 'warning');
+            $('#streamlabsAI > span.label').text("Streamlabs AI running");
+            $('#streamlabsAI').parent().attr('content', 'No game detected.');
+            $('#streamlabsAI > sl-icon').attr('name', 'exclamation-circle');
+        } else if (err && err.result && err.result.detail == 'No active process found') { 
         }
     });
 });
@@ -323,10 +437,21 @@ function stopActiveProcessPolling() {
     }
 }
 
-function loadGameEvents(gameName) {
+// run loadGameEvents whenever $('#gameSelect') changes
+$('#gameSelect').off('sl-change');
+$('#gameSelect').on('sl-change', event => {
+    const val = event.target && event.target.value;
+    if (!val) return;
+    loadGameEvents(val);
+});
 
-    if (!gameName) return;
-    console.log(getGameName(gameName));
+function loadGameEvents(gameName) {
+    // if gameName is provided, select that game in the dropdown
+    if (gameName) {
+        const $select = $('#gameSelect');
+        $select.val(gameName);
+    }
+
     $('sl-details[summary="Enable Game Events"] > span.help-text').text(`Show ${getGameName(gameName)} game events.`);
 
     const $details = $('sl-details[summary="Enable Game Events"]');
@@ -338,7 +463,7 @@ function loadGameEvents(gameName) {
     }
 
     // remove any previously generated checkboxes for this game
-    $details.find(`sl-checkbox[data-game="${gameName}"]`).remove();
+    $details.find(`sl-checkbox`).remove();
 
     // prefer the defaults from defaultUserSettings.GAME_EVENTS_MAP, fallback to getGameEvents list
     const defaultMap = (defaultUserSettings && defaultUserSettings.GAME_EVENTS_MAP && defaultUserSettings.GAME_EVENTS_MAP[gameName]) || null;
@@ -370,6 +495,7 @@ function loadGameEvents(gameName) {
         // immediately persist the updated settings
         streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
             oldSettings = structuredClone(appSettings);
+            streamlabs.postMessage('updateSettings', appSettings);
         }).catch(saveErr => {
             console.error('Failed to save user settings', saveErr);
             showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
@@ -386,22 +512,31 @@ async function checkActiveProcess() {
         if (response && response.game) {
             if (!activeGame) {
                 activeGame = true;
-                activeGameName = response.game
+                //
                 // keep the UI in sync
                 $('#streamlabsAI').prop('disabled', true);
-                $('#streamlabsAI').text('Streamlabs AI running');
+                $('#streamlabsAI > span.label').text('Streamlabs AI running');
                 $('#streamlabsAI').parent().attr('content', `${getGameName(response.game)} detected.`);
-                loadGameEvents(response.game);
+                $('#streamlabsAI > sl-icon').attr('name', 'check-circle');
+                $('#streamlabsAI').attr('variant', 'success');
+                //loadGameEvents(response.game);
             } else if(activeGame) {
                 if (activeGameName !== response.game) {
-                    activeGameName = response.game;
+                    //activeGameName = response.game;
                     $('#streamlabsAI').parent().attr('content', `${getGameName(response.game)} detected.`);
-                    loadGameEvents(response.game);
+                    //loadGameEvents(response.game);
                 }
             }
+            activeGameName = response.game;
+            loadGameEvents(activeGameName);
+            appSettings['lastActiveGame'] = activeGameName;
+            streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
+                oldSettings = structuredClone(appSettings);
+                streamlabs.postMessage('updateSettings', appSettings);
+            });
         }
     } catch (err) {
-        console.error('checkActiveProcess error', err);
+        //console.error('checkActiveProcess error', err);
         const msg = (err && (err.message || err.toString())) || '';
 
         if (msg.includes('Failed to fetch')) {
@@ -409,13 +544,17 @@ async function checkActiveProcess() {
             if (activeGame) activeGame = false;
             if (visionStarted) visionStarted = false;
             $('#streamlabsAI').prop('disabled', false);
-            $('#streamlabsAI').text('Start Streamlabs AI');
+            $('#streamlabsAI > span.label').text('Start Streamlabs AI');
             $('#streamlabsAI').parent().attr('content', 'Streamlabs AI is not running.');
+            $('#streamlabsAI > sl-icon').attr('name', 'play-circle');
+            $('#streamlabsAI').attr('variant', 'neutral');
         } else if (err && err.result && err.result.detail == 'No active process found') {
             if (activeGame) activeGame = false;
             $('#streamlabsAI').prop('disabled', true);
-            $('#streamlabsAI').text('Streamlabs AI running');
+            $('#streamlabsAI > span.label').text('Streamlabs AI running');
             $('#streamlabsAI').parent().attr('content', 'No game detected.');
+            $('#streamlabsAI > sl-icon').attr('name', 'exclamation-circle');
+            $('#streamlabsAI').attr('variant', 'warning');
         }
         // swallow other errors to avoid uncaught promise rejections; they are logged above
     }
@@ -435,13 +574,14 @@ function checkSavedChanges() {
 function saveChanges() {
     if (equals(oldSettings, appSettings) == false) {
         streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
+            
             showAlert('#userSettingsUpdated', `StatLine updated!`, 'Your settings have been saved.');
             $(".button-saved").show();
             $(".button-unsaved").hide();
 
             streamlabs.userSettings.getAssets().then(response => { 
                 userAssets = response;
-                //streamlabs.postMessage('updateTheme', appSettings);
+                streamlabs.postMessage('updateSettings', appSettings);
             });
         });
         oldSettings = structuredClone(appSettings);

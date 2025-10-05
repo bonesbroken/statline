@@ -1,34 +1,32 @@
 import $ from "jquery";
-import equals from 'is-equal-shallow';
-
-import '@shoelace-style/shoelace/dist/themes/dark.css';
-import { setBasePath } from '@shoelace-style/shoelace/dist/utilities/base-path.js';
-setBasePath('./shoelace');
+import { defaultUserSettings, appVersion, getGameName, getGameEvents, humanizeEventName, createEvent } from './utils.js';
 
 // streamlabs api variables
-let username, streamlabs;
-let settings = {};
+let streamlabs;
+let userAssets = {};
+let oldSettings = {};
 let appSettings = {};
+let lastEventTime = Date.now();
 
 $(function() {
-    init();
+    initApp();
 });
 
-async function init() {
+async function initApp() {
     // streamlabs api initialization
     streamlabs = window.Streamlabs;
     streamlabs.init({ receiveEvents: true }).then(async (data) => {
-        appSettings = data;
-        username = appSettings.profiles.streamlabs.name;
-
         await loadUserSettings();
     });
 
     streamlabs.onMessage(event => {
         switch(event.type) {
-            case 'updateTheme':
-                settings = event.data;
-                updateTheme();
+            case 'updateSettings':
+                appSettings = event.data;
+                break;
+            case 'fireGameEvent':
+                console.log(event.data);
+                fireGameEvent(event.data['gameKey'], event.data['eventName'], event.data['time']);
                 break;
                 
             default:
@@ -41,37 +39,72 @@ async function init() {
     });
 }
 
+function fireGameEvent(gameKey, eventName, time) {
+    const eventTime = ((time - lastEventTime) / 1000).toFixed(1);
+    lastEventTime = time;
+
+    const $canvasList = $('#canvasList');
+    if (!$canvasList.length) return; // nothing to do if container missing
+
+    // count only element children (jQuery .children() does this)
+    let childCount = $canvasList.children().length;
+
+    // If we're already at or above the max, remove the oldest before appending
+    const max = Number(appSettings && appSettings["maxEvents"]) || 0;
+    if (max > 0 && childCount >= max) {
+        // remove as many as needed to make room for one new item (usually 1)
+        const removeCount = childCount - (max - 1);
+        for (let i = 0; i < removeCount; i++) {
+            $canvasList.children().first().remove();
+        }
+        // refresh count
+        childCount = $canvasList.children().length;
+    }
+
+    createEvent({
+        parent: $canvasList[0],
+        game: gameKey,
+        event: eventName,
+        time: eventTime,
+        showEventTime: appSettings["showEventTime"],
+        color1: appSettings["color1"],
+        color2: appSettings["color2"]
+    });
+}
+
 async function loadUserSettings() {
     streamlabs.userSettings.get('statline-settings').then(data => {
-        console.log('loading user settings...', data);
 
         if (!data) {
-            console.log("no settings found, reverting to default")
-            data = Keyboard.defaultSettings;
+            data = defaultUserSettings;
+            console.log("Loaded default settings.", data)
         }
         if (typeof data == "object") {
 
             // check for missing values
-            for (const [key, value] of Object.entries(Keyboard.defaultSettings)) {
+            for (const [key, value] of Object.entries(defaultUserSettings)) {
                 if(!data.hasOwnProperty(key)) {
                     console.log(`setting '${key}' missing! set to ${value}`);
-                    data[key] = Keyboard.defaultSettings[key];
+                    data[key] = defaultUserSettings[key];
                 }
             }
-            settings = structuredClone(data);
-            settings['keyboard-logo'] = "";
+            oldSettings = structuredClone(data);
+            appSettings = structuredClone(data);
         }
+        
     });
 
     streamlabs.userSettings.getAssets().then(response => { 
-        customAssets = response;
-        saveCustomTextures();
-        console.log('=== LOADED CUSTOM ASSETS ===');
+        userAssets = response;
+        if (response && Object.keys(response).length > 0) {
+            console.log('User assets loaded:', response);
+        }
+        
     });
 
     return new Promise((resolve) => {
         setTimeout(() => {
-            console.log('loadUserSettings()');
+            console.log('User settings loaded:', appSettings);
             resolve();
         }, 1000);
     });

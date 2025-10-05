@@ -42,7 +42,7 @@ module.exports = {
         use: [MiniCssExtractPlugin.loader, 'css-loader'],
       },
       {
-        test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        test: /\.(png|svg|jpg|jpeg|gif|riv)$/i,
         type: 'asset/resource',
       },
     ],
@@ -58,6 +58,10 @@ module.exports = {
         {
           from: path.resolve(__dirname, 'src/images'),
           to: path.resolve(__dirname, 'dist/images')
+        },
+        {
+          from: path.resolve(__dirname, 'src/rive'),
+          to: path.resolve(__dirname, 'dist/rive')
         },
       ]
     })

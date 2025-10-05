@@ -1,7 +1,15 @@
+import $ from "jquery";
+import { Rive, Fit, Alignment, Layout } from "@rive-app/webgl2";
+import RiveAsset from "../rive/event.riv";
+
 export const defaultUserSettings = {
     "theme": "defaultTheme",
-    "maxEvents": 5,
-    "eventCount": true,
+    "maxEvents": 4,
+    "showEventCount": true,
+    "showEventTime": true,
+    "color1": "#ff5e54",
+    "color2": "#1609b4",
+    "lastActiveGame": null,
     // per-game event defaults (each event defaulted to false)
     "GAME_EVENTS_MAP": {
         'battlefield_6': {
@@ -48,6 +56,60 @@ export const defaultUserSettings = {
 
 export const appVersion = "0.1";
 
+// Convert hex like '#RRGGBB' or 'RRGGBB' or short 'RGB' to 0xAARRGGBB (alpha default 0xFF)
+function hexToArgbInt(hex, alpha = 0xFF) {
+    const h = String(hex || '').replace(/^#/, '').trim();
+    let r = 255, g = 255, b = 255, a = alpha & 0xFF;
+    if (h.length === 3) {
+        r = parseInt(h[0] + h[0], 16);
+        g = parseInt(h[1] + h[1], 16);
+        b = parseInt(h[2] + h[2], 16);
+    } else if (h.length === 6) {
+        r = parseInt(h.slice(0, 2), 16);
+        g = parseInt(h.slice(2, 4), 16);
+        b = parseInt(h.slice(4, 6), 16);
+    } else if (h.length === 8) {
+        // If 8 chars, treat as RRGGBBAA
+        r = parseInt(h.slice(0, 2), 16);
+        g = parseInt(h.slice(2, 4), 16);
+        b = parseInt(h.slice(4, 6), 16);
+        a = parseInt(h.slice(6, 8), 16) & 0xFF;
+    }
+    return ((a & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+}
+
+function rgbToArgbInt(r, g, b, a = 0xFF) {
+    return ((a & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+}
+
+export function createEvent(eventData) {
+    const $eventCanvas =$('<canvas>').addClass('riveCanvas');
+
+    let riveInstance = new Rive({
+        src: RiveAsset,
+        stateMachines: "State Machine 1",
+        canvas: $eventCanvas[0],
+        // layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
+        autoplay: true,
+        // useOffscreenRenderer: true,
+        autoBind: true,
+        onLoad: () => {
+            riveInstance.resizeDrawingSurfaceToCanvas();
+            const vmi = riveInstance.viewModelInstance;
+            vmi.string('eventName').value = humanizeEventName(eventData.event);
+            if(eventData.showEventTime) {
+                vmi.string('eventTime').value = `${eventData.time}s`;
+            } else {
+                vmi.string('eventTime').value = ``;
+            }
+            const color1Int = hexToArgbInt(eventData.color1 || 'FFFFFF');
+            vmi.color('color1').value = color1Int;
+            const color2Int = hexToArgbInt(eventData.color2 || 'FFFFFF');
+            vmi.color('color2').value = color2Int;
+        }
+    });
+    eventData.parent.append($eventCanvas[0]);
+}
 
 export function getGameName(game) {
     if (!game) return 'Unknown Game';
