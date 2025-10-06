@@ -1,7 +1,7 @@
 {
   "name": "application",
-  "version": "0.1",
-  "description": "Basic starter app template for Streamlabs App Store",
+  "version": "0.12",
+  "description": "StatLine App for the Streamlabs App Store",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -1,9 +1,9 @@
 {
-    "version": "0.21",
+    "version": "0.12",
     "name": "StatLine",
     "buildPath": "dist/",
     "permissions": ["slobs.scenes-sources", "slobs.external-links", "sld.vision"],
-    "supportedPlatforms": ["twitch", "youtube", "facebook"],
+    "supportedPlatforms": [],
     "icon": "./images/Icon.jpg",
     "sources": [
       {

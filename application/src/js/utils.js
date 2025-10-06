@@ -2,6 +2,18 @@ import $ from "jquery";
 import { Rive, Fit, Alignment, Layout } from "@rive-app/webgl2";
 import RiveAsset from "../rive/event.riv";
 
+function loadRiveFile(src, onSuccess, onError) {
+
+    const file = new rive.RiveFile({
+        src: src,
+        onLoad: () => onSuccess(file),
+        onLoadError: onError,
+    });
+
+    // Remember to call init() to trigger the load;
+    file.init().catch(onError);
+}
+
 export const defaultUserSettings = {
     "theme": "defaultTheme",
     "maxEvents": 4,
@@ -83,7 +95,7 @@ function rgbToArgbInt(r, g, b, a = 0xFF) {
 }
 
 export function createEvent(eventData) {
-    const $eventCanvas =$('<canvas>').addClass('riveCanvas');
+    const $eventCanvas = $('<canvas>').addClass('riveCanvas');
 
     let riveInstance = new Rive({
         src: RiveAsset,
@@ -109,6 +121,7 @@ export function createEvent(eventData) {
         }
     });
     eventData.parent.append($eventCanvas[0]);
+    return riveInstance;
 }
 
 export function getGameName(game) {

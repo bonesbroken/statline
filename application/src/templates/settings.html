@@ -484,6 +484,15 @@
       width: 400px;
       height: 120px;
     }
+
+    .event-group {
+      display: flex;
+      flex-direction: row;
+    }
+    .triggers, .events {
+      display: flex;
+      flex-direction: column;
+    }
     </style>
   </head>
   <body>
@@ -515,6 +524,11 @@
         <sl-details summary="Enable Game Events">
           <span class="help-text">Show game events.</span>
           <sl-select id="gameSelect" label="Select Game"></sl-select>
+          <div class="event-group">
+            <div class="triggers"></div>
+            <div class="events"></div>
+          </div>
+          
         </sl-details>
         <sl-details summary="StatLine Settings">
           <sl-range id="displayTimer" label="Hide StatLine after X seconds of inactivity" min="0" max="60" step="1"></sl-range>

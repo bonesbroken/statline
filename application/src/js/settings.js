@@ -43,6 +43,7 @@ let activeAppSourceId = 0;
 let userAssets = {};
 let oldSettings = {};
 let appSettings = {};
+let riveInstances = [];
 let activeProcessInterval = null;
 const pollingRate = 6000; // ms
 let lastEventTime = Date.now();
@@ -208,7 +209,7 @@ $('#randomEvent').on('click', () => {
     if (chosenGame && chosenEvent) {
         console.log(`firing random event: ${chosenGame} - ${chosenEvent}`);
         fireGameEvent(chosenGame, chosenEvent, Date.now());
-        //streamlabs.postMessage('fireGameEvent', {gameKey: chosenGame, eventName: chosenEvent, time: Date.now()});
+        streamlabs.postMessage('fireGameEvent', {gameKey: chosenGame, eventName: chosenEvent, time: Date.now()});
     } else {
         console.warn('No game or event available for randomEvent');
     }
@@ -263,7 +264,7 @@ function fireGameEvent(gameKey, eventName, time) {
         childCount = $canvasList.children().length;
     }
 
-    createEvent({
+    let eventItem = createEvent({
         parent: $canvasList[0],
         game: gameKey,
         event: eventName,
@@ -454,8 +455,9 @@ function loadGameEvents(gameName) {
 
     $('sl-details[summary="Enable Game Events"] > span.help-text').text(`Show ${getGameName(gameName)} game events.`);
 
-    const $details = $('sl-details[summary="Enable Game Events"]');
-    if (!$details.length) return;
+    const $eventList = $('sl-details[summary="Enable Game Events"] > > .event-group > .events');
+    const $triggerList = $('sl-details[summary="Enable Game Events"] > .event-group > .triggers');
+    if (!$eventList.length) return;
 
     // ensure appSettings has a GAME_EVENTS_MAP object
     if (!appSettings.GAME_EVENTS_MAP) {
@@ -463,7 +465,7 @@ function loadGameEvents(gameName) {
     }
 
     // remove any previously generated checkboxes for this game
-    $details.find(`sl-checkbox`).remove();
+    $eventList.find(`sl-checkbox`).remove();
 
     // prefer the defaults from defaultUserSettings.GAME_EVENTS_MAP, fallback to getGameEvents list
     const defaultMap = (defaultUserSettings && defaultUserSettings.GAME_EVENTS_MAP && defaultUserSettings.GAME_EVENTS_MAP[gameName]) || null;
@@ -475,15 +477,15 @@ function loadGameEvents(gameName) {
         const checked = userChecked || defaultChecked;
 
         const $cb = $(`<sl-checkbox name="gameEvent" id="${gameName}__${key}" data-game="${gameName}" data-event="${key}">${humanizeEventName(key)}</sl-checkbox>`);
-        $details.append($cb);
+        $eventList.append($cb);
         // set the DOM property for the web component
         const el = $cb.get(0);
         if (el) el.checked = !!checked;
     });
 
     // delegated handler to persist per-game event checkbox changes
-    $details.off('sl-change', 'sl-checkbox[data-game]');
-    $details.on('sl-change', 'sl-checkbox[data-game]', event => {
+    $eventList.off('sl-change', 'sl-checkbox[data-game]');
+    $eventList.on('sl-change', 'sl-checkbox[data-game]', event => {
         const tgt = event.target;
         const game = tgt.dataset.game;
         const ev = tgt.dataset.event;
