@@ -1,5 +1,5 @@
 {
-    "version": "0.12",
+    "version": "0.15",
     "name": "StatLine",
     "buildPath": "dist/",
     "permissions": ["slobs.scenes-sources", "slobs.external-links", "sld.vision"],
@@ -11,12 +11,11 @@
         "name": "StatLine Source",
         "id": "statline_source",
         "about": {
-          "description": "Description field for your app source.",
+          "description": "Show off your Kills, Wins, Deaths, & More in a customizable vertical feed.",
           "bullets": [
-            "Bullet point #1",
-            "Bullet point #2",
-            "Bullet point #3",
-            "Bullet point #4"
+            "Mix & Match your feed",
+            "Hide source after inactivity",
+            "Change colors to match your theme"
           ],
           "bannerImage": "./images/App Icon.jpg"
         },

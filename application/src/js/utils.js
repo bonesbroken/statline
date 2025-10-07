@@ -1,26 +1,15 @@
 import $ from "jquery";
-import { Rive, Fit, Alignment, Layout } from "@rive-app/webgl2";
+import { Rive } from "@rive-app/webgl2";
 import RiveAsset from "../rive/event.riv";
-
-function loadRiveFile(src, onSuccess, onError) {
-
-    const file = new rive.RiveFile({
-        src: src,
-        onLoad: () => onSuccess(file),
-        onLoadError: onError,
-    });
-
-    // Remember to call init() to trigger the load;
-    file.init().catch(onError);
-}
+export const appVersion = "0.15";
 
 export const defaultUserSettings = {
-    "theme": "defaultTheme",
     "maxEvents": 4,
     "showEventCount": true,
     "showEventTime": true,
     "color1": "#ff5e54",
     "color2": "#1609b4",
+    "hideTime": 0,
     "lastActiveGame": null,
     // per-game event defaults (each event defaulted to false)
     "GAME_EVENTS_MAP": {
@@ -66,8 +55,6 @@ export const defaultUserSettings = {
     }
 };
 
-export const appVersion = "0.1";
-
 // Convert hex like '#RRGGBB' or 'RRGGBB' or short 'RGB' to 0xAARRGGBB (alpha default 0xFF)
 function hexToArgbInt(hex, alpha = 0xFF) {
     const h = String(hex || '').replace(/^#/, '').trim();
@@ -94,6 +81,7 @@ function rgbToArgbInt(r, g, b, a = 0xFF) {
     return ((a & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
 }
 
+
 export function createEvent(eventData) {
     const $eventCanvas = $('<canvas>').addClass('riveCanvas');
 
@@ -118,10 +106,23 @@ export function createEvent(eventData) {
             vmi.color('color1').value = color1Int;
             const color2Int = hexToArgbInt(eventData.color2 || 'FFFFFF');
             vmi.color('color2').value = color2Int;
+            var imageProperty = vmi.image("pfp");
+
+            fetch(eventData.pfp).then(async (res) => {
+                // Decode the image from the response. This object is used to set the image property.
+                const image = await decodeImage(
+                    new Uint8Array(await res.arrayBuffer())
+                );
+                imageProperty.value = image;
+                // Rive will automatically clean this up. But it's good practice to dispose this manually
+                // after you have already set the decoded image. Don't call `unref` if you intend
+                // to use the decoded asset again.
+                image.unref();
+            });
         }
     });
-    eventData.parent.append($eventCanvas[0]);
-    return riveInstance;
+    
+    return [riveInstance, $eventCanvas[0]];
 }
 
 export function getGameName(game) {

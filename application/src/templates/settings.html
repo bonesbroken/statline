@@ -175,12 +175,12 @@
       }
 
     .app-title {
-      font-size: var(--sl-font-size-3x-large);
+      font-size: var(--sl-font-size-2x-large);
       font-weight: var(--sl-font-weight-semibold);
     }
 
     .app-description {
-      font-size: var(--sl-font-size-large);
+      font-size: var(--sl-font-size-medium);
       color: var(--sl-color-neutral-700);
       padding: 1rem 0rem;
     }
@@ -485,7 +485,7 @@
       height: 120px;
     }
 
-    .event-group {
+    .events-group {
       display: flex;
       flex-direction: row;
     }
@@ -493,6 +493,23 @@
       display: flex;
       flex-direction: column;
     }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+    
+    .fade-in {
+      animation: fadeIn 1s ease forwards;
+    }
+    .fade-out {
+      animation: fadeOut 1s ease forwards;
+    }
+
     </style>
   </head>
   <body>
@@ -502,11 +519,13 @@
 
     <aside id="sidebar" >
       <nav id="" class="raised-nav">
+        <div class="app-info">
+            <div class="app-title">StatLine</div>
+            <div class="app-description">Show off your Kills, Wins, Deaths, & More in a customizable vertical feed.</div>
+          </div>
         <div class="social-buttons">
-          <sl-tooltip content="Site"><sl-icon-button id="app-link" label="Site" name="globe"></sl-icon-button></sl-tooltip>
           <sl-tooltip content="X/Twitter"><sl-icon-button id="x-link" label="X/Twitter" name="twitter-x"></sl-icon-button></sl-tooltip>
           <sl-tooltip content="Discord"><sl-icon-button id="discord-link" label="Discord" name="discord"></sl-icon-button></sl-tooltip>
-          <sl-tooltip content="Tutorial"><sl-icon-button id="tutorial-link" label="Tutorial" name="youtube"></sl-icon-button></sl-tooltip>
           <span id="app-version"></span>
         </div>
         
@@ -524,14 +543,11 @@
         <sl-details summary="Enable Game Events">
           <span class="help-text">Show game events.</span>
           <sl-select id="gameSelect" label="Select Game"></sl-select>
-          <div class="event-group">
-            <div class="triggers"></div>
-            <div class="events"></div>
-          </div>
+          <div class="events"></div>
           
         </sl-details>
         <sl-details summary="StatLine Settings">
-          <sl-range id="displayTimer" label="Hide StatLine after X seconds of inactivity" min="0" max="60" step="1"></sl-range>
+          <sl-range id="hideTime" class="sliderInput" label="Hide StatLine after X seconds of inactivity" min="0" max="60" step="1"></sl-range>
           <sl-range id="maxEvents" class="sliderInput" label="Max Events" min="1" max="20" step="1"></sl-range>
         </sl-details>
         <sl-details summary="Display Settings">
@@ -570,18 +586,7 @@
           <div class="alert-content">Your StatLine settings have been deleted and reset.</div>
         </sl-alert>
       </div>
-      <article class="content">
-        <div class="content__body">
-          <div class="app-info">
-            <div class="app-title">StatLine</div>
-            <div class="app-description">Show off your Kills, Wins, Deaths, & More in a customizable vertical feed.</div>
-          </div>
-
-          <div class="pages">
-            <div id="canvasList"></div>
-          </div>
-        </div>
-      </article>
+      <div id="canvasList"></div>
     </main>
   </body>
 </html>

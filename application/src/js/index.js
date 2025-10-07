@@ -1,12 +1,13 @@
 import $ from "jquery";
-import { defaultUserSettings, appVersion, getGameName, getGameEvents, humanizeEventName, createEvent } from './utils.js';
+import { defaultUserSettings, createEvent } from './utils.js';
 
 // streamlabs api variables
 let streamlabs;
 let userAssets = {};
-let oldSettings = {};
 let appSettings = {};
+let riveInstances = [];
 let lastEventTime = Date.now();
+let _hideTimeoutId = null;
 
 $(function() {
     initApp();
@@ -25,7 +26,6 @@ async function initApp() {
                 appSettings = event.data;
                 break;
             case 'fireGameEvent':
-                console.log(event.data);
                 fireGameEvent(event.data['gameKey'], event.data['eventName'], event.data['time']);
                 break;
                 
@@ -46,7 +46,6 @@ function fireGameEvent(gameKey, eventName, time) {
     const $canvasList = $('#canvasList');
     if (!$canvasList.length) return; // nothing to do if container missing
 
-    // count only element children (jQuery .children() does this)
     let childCount = $canvasList.children().length;
 
     // If we're already at or above the max, remove the oldest before appending
@@ -55,14 +54,27 @@ function fireGameEvent(gameKey, eventName, time) {
         // remove as many as needed to make room for one new item (usually 1)
         const removeCount = childCount - (max - 1);
         for (let i = 0; i < removeCount; i++) {
-            $canvasList.children().first().remove();
+            // remove oldest DOM canvas
+            const $old = $canvasList.children().first();
+            if ($old.length) $old.remove();
+
+            // remove corresponding Rive instance from the queue and clean up
+            const oldInst = riveInstances.shift();
+            if (oldInst && typeof oldInst.cleanup === 'function') {
+                oldInst.cleanup();
+            }
         }
         // refresh count
         childCount = $canvasList.children().length;
     }
 
-    createEvent({
-        parent: $canvasList[0],
+    // If canvas list is currently hidden (opacity 0 or has fade-out), bring it back in
+    const currentOpacity = parseFloat($canvasList.css('opacity') || '1');
+    if (currentOpacity === 0 || $canvasList.hasClass('fade-out')) {
+        fadeInCanvasList();
+    }
+
+    let eventItem = createEvent({
         game: gameKey,
         event: eventName,
         time: eventTime,
@@ -70,6 +82,15 @@ function fireGameEvent(gameKey, eventName, time) {
         color1: appSettings["color1"],
         color2: appSettings["color2"]
     });
+
+    // keep track of the created Rive instance so we can clean it up later
+    if (eventItem) {
+        riveInstances.push(eventItem[0]);
+        $canvasList[0].append(eventItem[1]);
+    }
+
+    // reset/have the hide timer start counting again after this event
+    resetCanvasListHideTimer();
 }
 
 async function loadUserSettings() {
@@ -88,7 +109,6 @@ async function loadUserSettings() {
                     data[key] = defaultUserSettings[key];
                 }
             }
-            oldSettings = structuredClone(data);
             appSettings = structuredClone(data);
         }
         
@@ -108,4 +128,84 @@ async function loadUserSettings() {
             resolve();
         }, 1000);
     });
+}
+
+/**
+ * Fade helpers for #canvasList
+ */
+function fadeInCanvasList() {
+    const $el = $('#canvasList');
+    if (!$el.length) return;
+    $el.off('animationend.fade');
+    $el.removeClass('fade-out');
+    $el.addClass('fade-in');
+    // ensure final state stays visible
+    $el.on('animationend.fade', () => {
+        $el.css('opacity', '1');
+        $el.removeClass('fade-in');
+        $el.off('animationend.fade');
+    });
+}
+
+function fadeOutCanvasList() {
+    const $el = $('#canvasList');
+    if (!$el.length) return;
+    $el.off('animationend.fade');
+    $el.removeClass('fade-in');
+    $el.addClass('fade-out');
+    $el.on('animationend.fade', () => {
+        // keep hidden after animation
+        $el.css('opacity', '0');
+        $el.removeClass('fade-out');
+        $el.off('animationend.fade');
+
+        // cleanup all rive instances
+        try {
+            while (riveInstances.length) {
+                const inst = riveInstances.shift();
+                if (!inst) continue;
+                if (typeof inst.cleanup === 'function') {
+                    inst.cleanup();
+                }
+            }
+        } catch (err) {
+            console.error('Error cleaning up riveInstances', err);
+        }
+
+        // remove all child elements from the canvas list
+        $el.empty();
+    });
+}
+
+/**
+ * Start/reset hide timer based on appSettings.hideTime.
+ * If hideTime === 0 the canvas list is always visible.
+ */
+function resetCanvasListHideTimer() {
+    const $el = $('#canvasList');
+    if (!$el.length) return;
+
+    // read authoritative value from appSettings
+    const ht = Number(appSettings && appSettings["hideTime"]) || 0;
+    // clear existing timer
+    if (_hideTimeoutId) {
+        clearTimeout(_hideTimeoutId);
+        _hideTimeoutId = null;
+    }
+
+    if (ht === 0) {
+        // always visible
+        $el.css('opacity', '1');
+        $el.removeClass('fade-out fade-in');
+        return;
+    }
+
+    // ensure visible now (in case we just fired an event)
+    $el.css('opacity', '1');
+
+    // schedule fade out after ht seconds
+    _hideTimeoutId = setTimeout(() => {
+        fadeOutCanvasList();
+        _hideTimeoutId = null;
+    }, ht * 1000);
 }

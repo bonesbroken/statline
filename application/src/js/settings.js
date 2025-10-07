@@ -1,7 +1,6 @@
 import $ from "jquery";
 import equals from 'is-equal-shallow';
 import { defaultUserSettings, appVersion, getGameName, getGameEvents, humanizeEventName, createEvent } from './utils.js';
-
 import '@shoelace-style/shoelace/dist/themes/dark.css';
 import '@shoelace-style/shoelace/dist/components/button/button.js';
 import '@shoelace-style/shoelace/dist/components/icon/icon.js';
@@ -47,6 +46,88 @@ let riveInstances = [];
 let activeProcessInterval = null;
 const pollingRate = 6000; // ms
 let lastEventTime = Date.now();
+let lastDiceNumber = 1;
+let _hideTimeoutId = null;
+
+/**
+ * Fade helpers for #canvasList
+ */
+function fadeInCanvasList() {
+    const $el = $('#canvasList');
+    if (!$el.length) return;
+    $el.off('animationend.fade');
+    $el.removeClass('fade-out');
+    $el.addClass('fade-in');
+    // ensure final state stays visible
+    $el.on('animationend.fade', () => {
+        $el.css('opacity', '1');
+        $el.removeClass('fade-in');
+        $el.off('animationend.fade');
+    });
+}
+
+function fadeOutCanvasList() {
+    const $el = $('#canvasList');
+    if (!$el.length) return;
+    $el.off('animationend.fade');
+    $el.removeClass('fade-in');
+    $el.addClass('fade-out');
+    $el.on('animationend.fade', () => {
+        // keep hidden after animation
+        $el.css('opacity', '0');
+        $el.removeClass('fade-out');
+        $el.off('animationend.fade');
+
+        // cleanup all rive instances
+        try {
+            while (riveInstances.length) {
+                const inst = riveInstances.shift();
+                if (!inst) continue;
+                if (typeof inst.cleanup === 'function') {
+                    inst.cleanup();
+                }
+            }
+        } catch (err) {
+            console.error('Error cleaning up riveInstances', err);
+        }
+
+        // remove all child elements from the canvas list
+        $el.empty();
+    });
+}
+
+/**
+ * Start/reset hide timer based on appSettings.hideTime.
+ * If hideTime === 0 the canvas list is always visible.
+ */
+function resetCanvasListHideTimer() {
+    const $el = $('#canvasList');
+    if (!$el.length) return;
+
+    // read authoritative value from appSettings
+    const ht = Number(appSettings && appSettings["hideTime"]) || 0;
+    // clear existing timer
+    if (_hideTimeoutId) {
+        clearTimeout(_hideTimeoutId);
+        _hideTimeoutId = null;
+    }
+
+    if (ht === 0) {
+        // always visible
+        $el.css('opacity', '1');
+        $el.removeClass('fade-out fade-in');
+        return;
+    }
+
+    // ensure visible now (in case we just fired an event)
+    $el.css('opacity', '1');
+
+    // schedule fade out after ht seconds
+    _hideTimeoutId = setTimeout(() => {
+        fadeOutCanvasList();
+        _hideTimeoutId = null;
+    }, ht * 1000);
+}
 
 async function loadShoelaceElements() {
     await Promise.allSettled([
@@ -73,10 +154,8 @@ async function initApp() {
     streamlabs = window.Streamlabs;
     streamlabs.init({ receiveEvents: true }).then(async (data) => {
         console.log(`${data.profiles.streamlabs.name} data:`, data);
-
         await loadUserSettings();
         updateUI();
-        
         initDesktopAPI();
     });
 }
@@ -84,6 +163,8 @@ async function initApp() {
 function updateUI() {
     $('#app-version').text(`v${appVersion}`);
     $('#maxEvents')[0].value = appSettings["maxEvents"];
+    $('#hideTime')[0].value = appSettings["hideTime"];
+    $('#hideTime').attr('label', `Hide StatLine after ${appSettings["hideTime"]} seconds of inactivity`);
     $('#showEventCount').prop("checked", appSettings["showEventCount"]);
     $('#showEventTime').prop("checked", appSettings["showEventTime"]);
     $('#color1').val(appSettings["color1"]);
@@ -101,6 +182,9 @@ function updateUI() {
             loadGameEvents(appSettings['lastActiveGame']);
         }
     }
+
+    // ensure hide timer reflects current saved settings
+    resetCanvasListHideTimer();
 }
 
 function initDesktopAPI() {
@@ -206,14 +290,20 @@ $('#randomEvent').on('click', () => {
     const chosenGame = $gameSelect.length ? $gameSelect.val() : getRandomGame();
     const chosenEvent = getRandomEvent(chosenGame);
 
+    let diceNumber;
+    do {
+        diceNumber = Math.floor(Math.random() * 6) + 1;
+    } while (diceNumber === lastDiceNumber);
+    lastDiceNumber = diceNumber;
+
+    $('#randomEvent sl-icon').attr('name', `dice-${diceNumber}`);
+
     if (chosenGame && chosenEvent) {
-        console.log(`firing random event: ${chosenGame} - ${chosenEvent}`);
         fireGameEvent(chosenGame, chosenEvent, Date.now());
         streamlabs.postMessage('fireGameEvent', {gameKey: chosenGame, eventName: chosenEvent, time: Date.now()});
     } else {
         console.warn('No game or event available for randomEvent');
     }
-
 });
 
 // helper: pick a random game key from defaultUserSettings.GAME_EVENTS_MAP
@@ -249,7 +339,6 @@ function fireGameEvent(gameKey, eventName, time) {
     const $canvasList = $('#canvasList');
     if (!$canvasList.length) return; // nothing to do if container missing
 
-    // count only element children (jQuery .children() does this)
     let childCount = $canvasList.children().length;
 
     // If we're already at or above the max, remove the oldest before appending
@@ -258,14 +347,27 @@ function fireGameEvent(gameKey, eventName, time) {
         // remove as many as needed to make room for one new item (usually 1)
         const removeCount = childCount - (max - 1);
         for (let i = 0; i < removeCount; i++) {
-            $canvasList.children().first().remove();
+            // remove oldest DOM canvas
+            const $old = $canvasList.children().first();
+            if ($old.length) $old.remove();
+
+            // remove corresponding Rive instance from the queue and clean up
+            const oldInst = riveInstances.shift();
+            if (oldInst && typeof oldInst.cleanup === 'function') {
+                oldInst.cleanup();
+            }
         }
         // refresh count
         childCount = $canvasList.children().length;
     }
 
+    // If canvas list is currently hidden (opacity 0 or has fade-out), bring it back in
+    const currentOpacity = parseFloat($canvasList.css('opacity') || '1');
+    if (currentOpacity === 0 || $canvasList.hasClass('fade-out')) {
+        fadeInCanvasList();
+    }
+
     let eventItem = createEvent({
-        parent: $canvasList[0],
         game: gameKey,
         event: eventName,
         time: eventTime,
@@ -273,6 +375,15 @@ function fireGameEvent(gameKey, eventName, time) {
         color1: appSettings["color1"],
         color2: appSettings["color2"]
     });
+
+    // keep track of the created Rive instance so we can clean it up later
+    if (eventItem) {
+        riveInstances.push(eventItem[0]);
+        $canvasList[0].append(eventItem[1]);
+    }
+
+    // reset/have the hide timer start counting again after this event
+    resetCanvasListHideTimer();
 }
 
 async function loadUserSettings() {
@@ -327,10 +438,8 @@ function updateAddAppSourceButton(hasSource) {
 }
 
 // event handlers
-$("#app-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://bonesbroken.com/'); });
 $("#x-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://x.com/bonesbrokencom'); });
 $("#discord-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://discord.gg/XgZKP9nYU7'); });
-$("#tutorial-link").on('click', () => { streamlabsOBS.v1.External.openExternalLink('https://youtu.be/945x5hozkq8'); });
 
 $(".button-unsaved").on('click', () => { saveChanges(); });
 
@@ -346,12 +455,18 @@ $('.sliderInput').off('sl-change');
 $('.sliderInput').on('sl-change', event => {
     const val = event.target && event.target.value;
     if (val === undefined) return;
-    appSettings[$(event.target).attr('id')] = Number(val);
+    const id = $(event.target).attr('id');
+    appSettings[id] = Number(val);
 
     streamlabs.userSettings.set('statline-settings', appSettings).then(() => {
         oldSettings = structuredClone(appSettings);
         streamlabs.postMessage('updateSettings', appSettings);
-
+        // update hide timer only when hideTime changed
+        if (id === 'hideTime') {
+            resetCanvasListHideTimer();
+            $('#hideTime').attr('label', `Hide StatLine after ${appSettings["hideTime"]} seconds of inactivity`);
+        }
+            
     }).catch(saveErr => {
         console.error('Failed to save setting', saveErr);
         showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
@@ -455,8 +570,7 @@ function loadGameEvents(gameName) {
 
     $('sl-details[summary="Enable Game Events"] > span.help-text').text(`Show ${getGameName(gameName)} game events.`);
 
-    const $eventList = $('sl-details[summary="Enable Game Events"] > > .event-group > .events');
-    const $triggerList = $('sl-details[summary="Enable Game Events"] > .event-group > .triggers');
+    const $eventList = $('sl-details[summary="Enable Game Events"] > .events');
     if (!$eventList.length) return;
 
     // ensure appSettings has a GAME_EVENTS_MAP object
@@ -464,8 +578,8 @@ function loadGameEvents(gameName) {
         appSettings.GAME_EVENTS_MAP = structuredClone(defaultUserSettings.GAME_EVENTS_MAP || {});
     }
 
-    // remove any previously generated checkboxes for this game
-    $eventList.find(`sl-checkbox`).remove();
+    // remove any previously generated items for this game
+    $eventList.find(`.events-group`).remove();
 
     // prefer the defaults from defaultUserSettings.GAME_EVENTS_MAP, fallback to getGameEvents list
     const defaultMap = (defaultUserSettings && defaultUserSettings.GAME_EVENTS_MAP && defaultUserSettings.GAME_EVENTS_MAP[gameName]) || null;
@@ -476,19 +590,27 @@ function loadGameEvents(gameName) {
         const defaultChecked = defaultMap ? !!defaultMap[key] : false;
         const checked = userChecked || defaultChecked;
 
-        const $cb = $(`<sl-checkbox name="gameEvent" id="${gameName}__${key}" data-game="${gameName}" data-event="${key}">${humanizeEventName(key)}</sl-checkbox>`);
+        // put data-game / data-event on the parent .events-group
+        const $cb = $(
+          `<div class="events-group" data-game="${gameName}" data-event="${key}">
+             <sl-tooltip content="Fire Event"><sl-icon-button name="bullseye"></sl-icon-button></sl-tooltip>
+             <sl-checkbox name="gameEvent">${humanizeEventName(key)}</sl-checkbox>
+           </div>`
+        );
         $eventList.append($cb);
-        // set the DOM property for the web component
-        const el = $cb.get(0);
-        if (el) el.checked = !!checked;
+
+        // set the actual checkbox web-component's property
+        const checkboxEl = $cb.find('sl-checkbox').get(0);
+        if (checkboxEl) checkboxEl.checked = !!checked;
     });
 
     // delegated handler to persist per-game event checkbox changes
-    $eventList.off('sl-change', 'sl-checkbox[data-game]');
-    $eventList.on('sl-change', 'sl-checkbox[data-game]', event => {
+    $eventList.off('sl-change', 'sl-checkbox');
+    $eventList.on('sl-change', 'sl-checkbox', event => {
         const tgt = event.target;
-        const game = tgt.dataset.game;
-        const ev = tgt.dataset.event;
+        const group = tgt.closest && tgt.closest('.events-group');
+        const game = group && group.dataset && group.dataset.game;
+        const ev = group && group.dataset && group.dataset.event;
         if (!game || !ev) return;
         if (!appSettings.GAME_EVENTS_MAP) appSettings.GAME_EVENTS_MAP = {};
         if (!appSettings.GAME_EVENTS_MAP[game]) appSettings.GAME_EVENTS_MAP[game] = {};
@@ -503,6 +625,25 @@ function loadGameEvents(gameName) {
             showAlert('#generalAlert', 'Save Error', `Failed to save settings: ${saveErr && saveErr.message ? saveErr.message : String(saveErr)}`);
         });
     });
+
+    // delegated handler: trigger event when the icon button is clicked
+    $eventList.off('click', 'sl-icon-button');
+    $eventList.on('click', 'sl-icon-button', event => {
+        const btn = event.currentTarget || event.target;
+        const group = (btn.closest && btn.closest('.events-group')) || $(btn).closest('.events-group')[0];
+        const game = group && group.dataset && group.dataset.game;
+        const ev = group && group.dataset && group.dataset.event;
+        if (!game || !ev) return;
+
+        const now = Date.now();
+        fireGameEvent(game, ev, now);
+
+        if (typeof streamlabs !== 'undefined' && streamlabs && typeof streamlabs.postMessage === 'function') {
+            streamlabs.postMessage('fireGameEvent', { gameKey: game, eventName: ev, time: now });
+        }
+    });
+
+    
 }
 
 async function checkActiveProcess() {
