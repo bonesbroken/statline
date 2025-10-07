@@ -106,19 +106,6 @@ export function createEvent(eventData) {
             vmi.color('color1').value = color1Int;
             const color2Int = hexToArgbInt(eventData.color2 || 'FFFFFF');
             vmi.color('color2').value = color2Int;
-            var imageProperty = vmi.image("pfp");
-
-            fetch(eventData.pfp).then(async (res) => {
-                // Decode the image from the response. This object is used to set the image property.
-                const image = await decodeImage(
-                    new Uint8Array(await res.arrayBuffer())
-                );
-                imageProperty.value = image;
-                // Rive will automatically clean this up. But it's good practice to dispose this manually
-                // after you have already set the decoded image. Don't call `unref` if you intend
-                // to use the decoded asset again.
-                image.unref();
-            });
         }
     });
     
