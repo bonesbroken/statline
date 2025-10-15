@@ -192,6 +192,9 @@ function initDesktopAPI() {
     streamlabsOBS.apiReady.then(() => {
         
         streamlabsOBS.v1.Vision.initiateSubscription(); // Vision Module
+        streamlabsOBS.v1.Vision.onVisionStateChanged(state => console.log(state));
+        streamlabsOBS.v1.Vision.onVisionGameChanged(state => console.log(state));
+
         if (typeof startActiveProcessPolling === 'function') {
             startActiveProcessPolling(pollingRate);
         }
